@@ -48,9 +48,7 @@ namespace imvt {
 CV_EXPORTS_W void oclScale(const UMat& src, UMat& dst, float factor);
 CV_EXPORTS_W void oclMotionDetection(const UMat& cur, const UMat& pre, UMat& motion);
 CV_EXPORTS_W void oclAdjustFlowTowardPrevious(const UMat& prevFlow, const UMat& motion, UMat& flow);
-
-
-
+CV_EXPORTS_W void oclEstimateFlow(const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, UMat& flow, const Rect& box);
 	
 }	// end namespace cv
 }	// end namespace imvt

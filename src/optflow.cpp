@@ -47,12 +47,29 @@ CV_EXPORTS_W void oclMotionDetection(const UMat& cur, const UMat& pre, UMat& mot
     k.run(2, globalsize, NULL, false);
 }
 
-
+// adjust flow toward previous
 CV_EXPORTS_W void oclAdjustFlowTowardPrevious(const UMat& prevFlow, const UMat& motion, UMat& flow) {
-
+    ocl::Kernel k("adjust_flow_toward_previous", ocl::imvt::optflow_oclsrc);
+    k.args(ocl::KernelArg::ReadWriteNoSize(flow), ocl::KernelArg::ReadOnlyNoSize(prevFlow), ocl::KernelArg::ReadOnlyNoSize(motion));
+    size_t globalsize[] = {flow.cols, flow.rows};
+    k.run(2, globalsize, NULL, false);
 }
 
-
+// estimate the flow of each pixel in I0 by searching a rectangle
+CV_EXPORTS_W void oclEstimateFlow(const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, UMat& flow, const Rect& box) {
+    ocl::Kernel k("estimate_flow", ocl::imvt::optflow_oclsrc);
+    k.args(ocl::KernelArg::ReadOnlyNoSize(I0), 
+        ocl::KernelArg::ReadOnlyNoSize(I1), 
+        ocl::KernelArg::ReadOnlyNoSize(alpha0), 
+        ocl::KernelArg::ReadOnlyNoSize(alpha1),
+        ocl::KernelArg::ReadWriteNoSize(flow),
+        ocl::KernelArg::Constant(&box.x, sizeof(box.width)),
+        ocl::KernelArg::Constant(&box.y, sizeof(box.y)),
+        ocl::KernelArg::Constant(&box.width, sizeof(box.width)),
+        ocl::KernelArg::Constant(&box.height, sizeof(box.height)));
+    size_t globalsize[] = {flow.cols, flow.rows};
+    k.run(2, globalsize, NULL, false);
+}
 
 struct OCLOptFlow {
 	static constexpr int   kPyrMinImageSize = 24;
@@ -206,7 +223,7 @@ struct OCLOptFlow {
 				/* @deleted
 				adjustFlowTowardPrevious(prevFlowPyramid[level], motionPyramid[level], flow);
 				*/
-				oclAdjustFlowTowardPrevious(prevFlow, motion, flow);
+				oclAdjustFlowTowardPrevious(prevFlowPyramid[level], motionPyramid[level], flow);
 			}
 			
 			if (level > 0) { // scale the flow up to the next size
@@ -260,7 +277,7 @@ struct OCLOptFlow {
 		DirectionHint hint) {
 
 		// image gradients
-		Mat I0x, I0y, I1x, I1y;
+		UMat I0x, I0y, I1x, I1y;
 		const int kSameDepth = -1; // same depth as source image
 		const int kKernelSize = 1;
 		Sobel(I0, I0x, kSameDepth, 1, 0, kKernelSize, 1, 0.0f, BORDER_REPLICATE);
@@ -274,18 +291,19 @@ struct OCLOptFlow {
 		GaussianBlur(I0y, I0y, kGradientBlurSize, kGradientBlurSigma);
 		GaussianBlur(I1x, I1x, kGradientBlurSize, kGradientBlurSigma);
 		GaussianBlur(I1y, I1y, kGradientBlurSize, kGradientBlurSigma);
-		/*@fixing
+		
 		if (flow.empty()) {
 			// initialize to all zeros
-			flow = Mat::zeros(I0.size(), CV_32FC2);
+			flow = UMat::zeros(I0.size(), CV_32FC2);
 			// optionally look for a better flow
 			if (kMaxPercentage > 0 && hint != DirectionHint::UNKNOWN) {
 				adjustInitialFlow(I0, I1, alpha0, alpha1, flow, hint);
 			}
 		}
 
+        
 		// blur flow. we will regularize against this
-		Mat blurredFlow;
+		UMat blurredFlow;
 		GaussianBlur(
 			flow,
 			blurredFlow,
@@ -293,7 +311,7 @@ struct OCLOptFlow {
 			kBlurredFlowSigma);
 
 		const cv::Size imgSize = I0.size();
-
+		/* @fixing
 		// sweep from top/left
 		for (int y = 0; y < imgSize.height; ++y) {
 			for (int x = 0; x < imgSize.width; ++x) {
@@ -322,6 +340,102 @@ struct OCLOptFlow {
 		lowAlphaFlowDiffusion(alpha0, alpha1, flow);
 		*/
 	}
+
+    void adjustInitialFlow(
+        const UMat& I0,
+        const UMat& I1,
+        const UMat& alpha0,
+        const UMat& alpha1,
+        UMat& flow,
+        const DirectionHint hint) {
+        
+        // compute a version of I1 that matches I0's intensity
+        // this is basically poor man's color correction
+        /* @deleted
+        Mat I1eq = I1 * computeIntensityRatio(I0, alpha0, I1, alpha1);
+        */
+		float ratio = computeIntensityRatio(I0.getMat(ACCESS_READ), alpha0.getMat(ACCESS_READ), 
+			I1.getMat(ACCESS_READ), alpha1.getMat(ACCESS_READ));
+		UMat I1eq = UMat::zeros(I1.size(), I1.type());
+		oclScale(I1, I1eq, ratio);
+        
+        // estimate the flow of each pixel in I0 by searching a rectangle
+        Rect box = computeSearchBox(hint);
+        /* @deleted
+        for (int i0y = 0; i0y < I0.rows; ++i0y) {
+            for (int i0x = 0; i0x < I0.cols; ++i0x) {
+                if (alpha0.at<float>(i0y, i0x) > kUpdateAlphaThreshold) {
+                    // create affinity for (0,0) by using fraction of the actual error
+                    float kFraction = 0.8f; // lower the fraction to increase affinity
+                    float errorBest = kFraction * computePatchError(I0, alpha0, i0x, i0y, I1eq, alpha1, i0x, i0y);
+                    int i1xBest = i0x, i1yBest = i0y;
+                    // look for better patch in the box
+                    for (int dy = box.y; dy < box.y + box.height; ++dy) {
+                        for (int dx = box.x; dx < box.x + box.width; ++dx) {
+                            int i1x = i0x + dx;
+                            int i1y = i0y + dy;
+                            if (0 <= i1x && i1x < I1.cols && 0 <= i1y && i1y < I1.rows) {
+                                float error = computePatchError(I0, alpha0, i0x, i0y, I1eq, alpha1, i1x, i1y);
+                                if (errorBest > error) {
+                                    errorBest = error;
+                                    i1xBest = i1x;
+                                    i1yBest = i1y;
+                                }
+                            }
+                        }
+                    }
+                    // use the best match
+                    flow.at<Point2f>(i0y, i0x) = Point2f(i1xBest - i0x, i1yBest - i0y);
+                }
+            }
+        }
+        */
+        oclEstimateFlow(I0, I1, alpha0, alpha1, flow, box);
+        
+    }
+
+    
+    float computeIntensityRatio(
+        const Mat& lhs, const Mat& lhsAlpha,
+        const Mat& rhs, const Mat& rhsAlpha) {
+        // just scale by the ratio between the sums, attenuated by alpha
+        //CHECK_EQ(lhs.size(), rhs.size());
+        float sumLhs = 0;
+        float sumRhs = 0;
+        for (int y = 0; y < lhs.rows; ++y) {
+            for (int x = 0; x < lhs.cols; ++x) {
+                float alpha = lhsAlpha.at<float>(y, x) * rhsAlpha.at<float>(y, x);
+                sumLhs += alpha * lhs.at<float>(y, x);
+                sumRhs += alpha * rhs.at<float>(y, x);
+            }
+        }
+        return sumLhs / sumRhs;
+    }
+
+
+    Rect computeSearchBox(DirectionHint hint) {
+        // we search a rectangle that is a fraction of the coarsest pyramid level
+        const int dist = computeSearchDistance();
+        // the rectangle extends ortho to each side of the search direction
+        static const int kRatio = 8; // aspect ratio of search box
+        const int ortho = (dist + kRatio / 2) / kRatio;
+        const int thickness = 2 * ortho + 1;
+        switch (hint) {
+            // opencv rectangles are left, top, width, height
+            case DirectionHint::RIGHT: return Rect(0, -ortho, dist + 1, thickness);
+            case DirectionHint::DOWN: return Rect(-ortho, 0, thickness, dist + 1);
+            case DirectionHint::LEFT: return Rect(-dist, -ortho, dist + 1, thickness);
+            case DirectionHint::UP: return Rect(-ortho, -dist, thickness, dist + 1);
+            case DirectionHint::UNKNOWN: break; // silence warning
+        }
+        //LOG(FATAL) << "unexpected direction " << int(hint);
+        return Rect();
+    }
+
+    static inline int computeSearchDistance() {
+        // we search a fraction of the coarsest pyramid level
+        return (kPyrMinImageSize * kMaxPercentage + 50) / 100;
+    }
 
     
 };
