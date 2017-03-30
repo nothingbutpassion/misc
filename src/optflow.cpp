@@ -28,6 +28,15 @@ CV_EXPORTS_W void computeOpticalFlow(
 }
 
 
+
+inline void adjustLocalSize(size_t globalsize[], size_t localsize[])   {
+    localsize[0] = globalsize[0]%256 == 0 ? 256 : globalsize[0]%8 == 0 ? 8 : 1;
+    localsize[1] = globalsize[1]%256 == 0 ? 256 : globalsize[1]%8 == 0 ? 8 : 1;
+    localsize[0] = localsize[0] > globalsize[0] ? 1: globalsize[0];
+    localsize[1] = localsize[1] > globalsize[1] ? 1: globalsize[0];
+}
+
+
 // scale operation: dst == src * ration 
 CV_EXPORTS_W void oclScale(const UMat& src, UMat& dst, float factor) {
 	CV_Assert(src.type() == CV_32FC1 || src.type() == CV_32FC2 || src.type() == CV_32FC4 || src.type() == dst.type());
@@ -35,41 +44,67 @@ CV_EXPORTS_W void oclScale(const UMat& src, UMat& dst, float factor) {
     ocl::Kernel k(kernelName.c_str(), ocl::imvt::optflow_oclsrc);
     k.args(ocl::KernelArg::ReadWriteNoSize(src), ocl::KernelArg::ReadWriteNoSize(dst), ocl::KernelArg::Constant(&factor, sizeof(factor)));
     size_t globalsize[] = {src.cols, src.rows};
+    size_t localsize[] = {1, 1};
+    adjustLocalSize(globalsize, localsize);
     k.run(2, globalsize, NULL, false);
 }
-
 
 // do motion detection vs. previous frame's images
 CV_EXPORTS_W void oclMotionDetection(const UMat& cur, const UMat& pre, UMat& motion) {
     ocl::Kernel k("motion_detection", ocl::imvt::optflow_oclsrc);
-    k.args(ocl::KernelArg::ReadOnlyNoSize(cur), ocl::KernelArg::ReadOnlyNoSize(pre), ocl::KernelArg::WriteOnlyNoSize(motion));
+    k.args(ocl::KernelArg::ReadOnlyNoSize(cur),
+        ocl::KernelArg::ReadOnlyNoSize(pre),
+        ocl::KernelArg::WriteOnlyNoSize(motion));
     size_t globalsize[] = {motion.cols, motion.rows};
+    size_t localsize[] = {1, 1};
+    adjustLocalSize(globalsize, localsize);
     k.run(2, globalsize, NULL, false);
 }
 
 // adjust flow toward previous
 CV_EXPORTS_W void oclAdjustFlowTowardPrevious(const UMat& prevFlow, const UMat& motion, UMat& flow) {
     ocl::Kernel k("adjust_flow_toward_previous", ocl::imvt::optflow_oclsrc);
-    k.args(ocl::KernelArg::ReadWriteNoSize(flow), ocl::KernelArg::ReadOnlyNoSize(prevFlow), ocl::KernelArg::ReadOnlyNoSize(motion));
+    k.args(ocl::KernelArg::ReadWriteNoSize(flow),
+        ocl::KernelArg::ReadOnlyNoSize(prevFlow),
+        ocl::KernelArg::ReadOnlyNoSize(motion));
     size_t globalsize[] = {flow.cols, flow.rows};
-    k.run(2, globalsize, NULL, false);
+    size_t localsize[] = {1, 1};
+    adjustLocalSize(globalsize, localsize);
+    k.run(2, globalsize, localsize, false);
 }
 
 // estimate the flow of each pixel in I0 by searching a rectangle
 CV_EXPORTS_W void oclEstimateFlow(const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, UMat& flow, const Rect& box) {
     ocl::Kernel k("estimate_flow", ocl::imvt::optflow_oclsrc);
-    k.args(ocl::KernelArg::ReadOnlyNoSize(I0), 
-        ocl::KernelArg::ReadOnlyNoSize(I1), 
+    k.args(ocl::KernelArg::ReadOnly(I0), 
+        ocl::KernelArg::ReadOnly(I1),
         ocl::KernelArg::ReadOnlyNoSize(alpha0), 
         ocl::KernelArg::ReadOnlyNoSize(alpha1),
         ocl::KernelArg::ReadWriteNoSize(flow),
-        ocl::KernelArg::Constant(&box.x, sizeof(box.width)),
+        ocl::KernelArg::Constant(&box.x, sizeof(box.x)),
         ocl::KernelArg::Constant(&box.y, sizeof(box.y)),
         ocl::KernelArg::Constant(&box.width, sizeof(box.width)),
         ocl::KernelArg::Constant(&box.height, sizeof(box.height)));
     size_t globalsize[] = {flow.cols, flow.rows};
-    k.run(2, globalsize, NULL, false);
+    size_t localsize[] = {1, 1};
+    adjustLocalSize(globalsize, localsize);
+    k.run(2, globalsize, localsize, false);
 }
+
+// low alpha flow diffusion
+CV_EXPORTS_W void oclAlphaFlowDiffusion(const UMat& alpha0, const UMat& alpha1, const UMat& blurredFlow, UMat& flow) {
+    ocl::Kernel k("alpha_flow_diffusion", ocl::imvt::optflow_oclsrc);
+    k.args(ocl::KernelArg::ReadOnlyNoSize(alpha0), 
+        ocl::KernelArg::ReadOnlyNoSize(alpha1),
+        ocl::KernelArg::ReadOnlyNoSize(blurredFlow),
+        ocl::KernelArg::ReadWriteNoSize(flow));
+    size_t globalsize[] = {flow.cols, flow.rows};
+    size_t localsize[] = {1, 1};
+    adjustLocalSize(globalsize, localsize);
+    k.run(2, globalsize, localsize, false);
+}
+
+
 
 struct OCLOptFlow {
 	static constexpr int   kPyrMinImageSize = 24;
@@ -336,9 +371,9 @@ struct OCLOptFlow {
 				}
 			}
 		}
+		*/
 		medianBlur(flow, flow, kMedianBlurSize);
 		lowAlphaFlowDiffusion(alpha0, alpha1, flow);
-		*/
 	}
 
     void adjustInitialFlow(
@@ -435,6 +470,27 @@ struct OCLOptFlow {
     static inline int computeSearchDistance() {
         // we search a fraction of the coarsest pyramid level
         return (kPyrMinImageSize * kMaxPercentage + 50) / 100;
+    }
+
+
+    void lowAlphaFlowDiffusion(const UMat& alpha0, const UMat& alpha1, UMat& flow) {
+        UMat blurredFlow;
+        GaussianBlur(
+            flow,
+            blurredFlow,
+            Size(kBlurredFlowKernelWidth, kBlurredFlowKernelWidth),
+            kBlurredFlowSigma);
+        /* @deleted
+        for (int y = 0; y < flow.rows; ++y) {
+            for (int x = 0; x < flow.cols; ++x) {
+                const float a0 = alpha0.at<float>(y, x);
+                const float a1 = alpha1.at<float>(y, x);
+                const float diffusionCoef = 1.0f - a0 * a1;
+                flow.at<Point2f>(y, x) = diffusionCoef * blurredFlow.at<Point2f>(y, x) + (1.0f - diffusionCoef) * flow.at<Point2f>(y, x);
+            }
+        }
+        */
+        oclAlphaFlowDiffusion(alpha0, alpha1, blurredFlow, flow);
     }
 
     
