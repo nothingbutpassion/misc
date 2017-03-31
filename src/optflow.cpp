@@ -31,9 +31,9 @@ CV_EXPORTS_W void computeOpticalFlow(
 
 inline void adjustLocalSize(size_t globalsize[], size_t localsize[])   {
     localsize[0] = globalsize[0]%256 == 0 ? 256 : globalsize[0]%8 == 0 ? 8 : 1;
+	localsize[0] = localsize[0] > globalsize[0] ? 1 : localsize[0];
     localsize[1] = globalsize[1]%256 == 0 ? 256 : globalsize[1]%8 == 0 ? 8 : 1;
-    localsize[0] = localsize[0] > globalsize[0] ? 1: globalsize[0];
-    localsize[1] = localsize[1] > globalsize[1] ? 1: globalsize[0];
+    localsize[1] = localsize[1] > globalsize[1] ? 1: localsize[0];
 }
 
 
@@ -104,6 +104,69 @@ CV_EXPORTS_W void oclAlphaFlowDiffusion(const UMat& alpha0, const UMat& alpha1, 
     k.run(2, globalsize, localsize, false);
 }
 
+// sweep from top/left
+CV_EXPORTS_W void oclSweepFromTopLeft(
+    const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
+    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow) {
+    
+
+    int minrc = I0.rows < I0.cols ?  I0.rows : I0.cols;
+	// vector<ocl::Kernel*> kernels;
+    for (int i=0; i < I0.rows + I0.cols - 1; ++i) {
+        int start_y = i < I0.rows ? i : I0.rows - 1;  
+        int start_x = i - start_y;
+		ocl::Kernel k("sweep_from_top_left", ocl::imvt::optflow_oclsrc);
+        k.args(ocl::KernelArg::ReadOnlyNoSize(I0), 
+            ocl::KernelArg::ReadOnlyNoSize(I1),
+            ocl::KernelArg::ReadOnlyNoSize(alpha0),
+            ocl::KernelArg::ReadOnlyNoSize(alpha1),
+            ocl::KernelArg::ReadOnlyNoSize(I0x),
+            ocl::KernelArg::ReadOnlyNoSize(I0y),
+            ocl::KernelArg::ReadOnlyNoSize(I1x),
+            ocl::KernelArg::ReadOnlyNoSize(I1y),
+            ocl::KernelArg::ReadOnlyNoSize(blurredFlow),
+            ocl::KernelArg::ReadWrite(flow),
+            ocl::KernelArg::Constant(&start_x, sizeof(start_x)),
+            ocl::KernelArg::Constant(&start_y, sizeof(start_y)));
+
+        size_t globalsize[] ={(i < minrc ? i+1 : I0.rows+I0.cols-1-i < minrc ? I0.rows+I0.cols-1-i : minrc), 1};
+        size_t localsize[] = {1, 1};
+        adjustLocalSize(globalsize, localsize);
+        k.run(1, globalsize, localsize, false);
+		// cout << flow.getMat(ACCESS_READ) << endl;
+    }
+}
+
+// sweep from bottom/right
+CV_EXPORTS_W void oclSweepFromBottomRight(
+    const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
+    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow) {
+    ocl::Kernel k("sweep_from_bottom_right", ocl::imvt::optflow_oclsrc);
+    
+    int minrc = I0.rows < I0.cols ?  I0.rows : I0.cols;    
+    for (int i=I0.rows + I0.cols - 2; i >= 0 ; --i) {
+        int start_y = i < I0.rows ? i : I0.rows - 1;  
+        int start_x = i - start_y;
+        k.args(ocl::KernelArg::ReadOnlyNoSize(I0), 
+            ocl::KernelArg::ReadOnlyNoSize(I1),
+            ocl::KernelArg::ReadOnlyNoSize(alpha0),
+            ocl::KernelArg::ReadOnlyNoSize(alpha1),
+            ocl::KernelArg::ReadOnlyNoSize(I0x),
+            ocl::KernelArg::ReadOnlyNoSize(I0y),
+            ocl::KernelArg::ReadOnlyNoSize(I1x),
+            ocl::KernelArg::ReadOnlyNoSize(I1y),
+            ocl::KernelArg::ReadOnlyNoSize(blurredFlow),
+            ocl::KernelArg::ReadWrite(flow),
+            ocl::KernelArg::Constant(&start_x, sizeof(start_x)),
+            ocl::KernelArg::Constant(&start_y, sizeof(start_y)));
+        size_t globalsize[] ={(i < minrc ? i+1 : I0.rows+I0.cols-1-i < minrc ? I0.rows+I0.cols-1-i : minrc), 1};
+        size_t localsize[] = {1, 1};
+        adjustLocalSize(globalsize, localsize);
+        k.run(1, globalsize, localsize, false);
+
+		//cout << flow.getMat(ACCESS_READ) << endl;
+    }   
+}
 
 
 struct OCLOptFlow {
@@ -346,7 +409,9 @@ struct OCLOptFlow {
 			kBlurredFlowSigma);
 
 		const cv::Size imgSize = I0.size();
-		/* @fixing
+		
+		
+		/* @deleted
 		// sweep from top/left
 		for (int y = 0; y < imgSize.height; ++y) {
 			for (int x = 0; x < imgSize.width; ++x) {
@@ -358,8 +423,11 @@ struct OCLOptFlow {
 				}
 			}
 		}
+		*/
+		oclSweepFromTopLeft(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
 		medianBlur(flow, flow, kMedianBlurSize);
 
+		/* @deleted
 		// sweep from bottom/right
 		for (int y = imgSize.height - 1; y >= 0; --y) {
 			for (int x = imgSize.width - 1; x >= 0; --x) {
@@ -372,7 +440,9 @@ struct OCLOptFlow {
 			}
 		}
 		*/
+        oclSweepFromBottomRight(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
 		medianBlur(flow, flow, kMedianBlurSize);
+        
 		lowAlphaFlowDiffusion(alpha0, alpha1, flow);
 	}
 

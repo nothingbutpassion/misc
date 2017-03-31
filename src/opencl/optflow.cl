@@ -183,37 +183,129 @@ __kernel void alpha_flow_diffusion(
 	float diffusionCoef = 1 - alpha0[alpha0_index]*alpha1[alpha1_index]; 
 	flow[flow_index] = diffusionCoef*blurred_flow[blurred_index] + (1 - diffusionCoef)*flow[flow_index];
 }
-
-
+	
 /**
- * @brief two pass sweeping  
- * 1) from top/left 	=>  bottom/right
- * 2) from bottom/right => top/left
+ * @brief sweep from top left
  */
-static inline float getPixBilinear32FExtend(const Mat& img, float x, float y) {
-	const cv::Size& imgSize = img.size();
-	x                 = min(imgSize.width - 2.0f, max(0.0f, x));
-	y                 = min(imgSize.height - 2.0f, max(0.0f, y));
-	const int x0      = int(x);
-	const int y0      = int(y);
-	const float xR    = x - float(x0);
-	const float yR    = y - float(y0);
-	const float* p    = img.ptr<float>(y0);
-	const float f00   = *(p + x0);
-	const float f01   = *(p + x0 + img.cols);
-	const float f10   = *(p + x0 + 1);
-	const float f11   = *(p + x0 + img.cols + 1);
-	const float a1    = f00;
-	const float a2    = f10 - f00;
-	const float a3    = f01 - f00;
-	const float a4    = f00 + f11 - f10 - f01;
-	return a1 + a2 * xR + a3 * yR + a4 * xR * yR;
+
+#define matf32c1(img, x, y)	img##[((img##_offset + (y)*img##_step)>>2)+(x)]
+#define matf32c2(img, x, y) img##[((img##_offset + (y)*img##_step)>>3)+(x)]
+#define mat(img, x, y) 		matf32c1(img, x, y)
+#define mat2(img, x, y) 	matf32c2(img, x, y)
+
+__constant int kUseDirectionalRegularization = 0;			// NOTES: should be same as the one in host program
+
+
+float get_pix_bilinear32f_extend(
+	__global const float* img, int img_step, int img_offset, 
+	int img_rows, int img_cols, float x, float y)
+{
+	x = min(img_cols - 2.0f, max(0.0f, x));
+	y = min(img_rows - 2.0f, max(0.0f, y));
+	int x0 = convert_int_rtz(x);
+	int y0 = convert_int_rtz(y);
+	float xR = x - x0;
+	float yR = y - y0;
+	float f00 = mat(img, x0, y0);
+	float f01 = mat(img, x0, y0+1);
+	float f10 = mat(img, x0+1, y0);
+	float f11 = mat(img, x0+1, y0+1);
+	return f00 + (f10 - f00)*xR + (f01 - f00)*yR + (f00 + f11 - f10 - f01)*xR*yR;
 }
 
 
+float error_function(
+	__global const float* I0, int I0_step, int I0_offset,
+	__global const float* I1, int I1_step, int I1_offset,
+	__global const float* I0x, int I0x_step, int I0x_offset,
+	__global const float* I0y, int I0y_step, int I0y_offset,
+	__global const float* I1x, int I1x_step, int I1x_offset,
+	__global const float* I1y, int I1y_step, int I1y_offset,
+	__global const float2* blurred, int blurred_step, int blurred_offset,
+	int x, int y, float flow_x, int flow_y)
+{
+	/*
+	const float matchX      = x + flowDir.x;
+	const float matchY      = y + flowDir.y;
+	const float i0x         = I0x.at<float>(y, x);
+	const float i0y         = I0y.at<float>(y, x);
+	const float i1x         = getPixBilinear32FExtend(I1x, matchX, matchY);
+	const float i1y         = getPixBilinear32FExtend(I1y, matchX, matchY);
+	const Point2f flowDiff  = blurredFlow.at<Point2f>(y, x) - flowDir;
+	const float smoothness  = sqrtf(flowDiff.dot(flowDiff));
 
+	float err = sqrtf((i0x - i1x) * (i0x - i1x) + (i0y - i1y) * (i0y - i1y))
+		+ smoothness * kSmoothnessCoef
+		+ kVerticalRegularizationCoef * fabsf(flowDir.y) / float(I0.cols)
+		+ kHorizontalRegularizationCoef * fabsf(flowDir.x) / float(I0.cols);
+	
+	if (kUseDirectionalRegularization) {
+		Point2f bf = blurredFlow.at<Point2f>(y, x);
+		const float blurredFlowMag = sqrtf(bf.dot(bf));
+		const static float kEpsilon = 0.001f;
+		bf /= blurredFlowMag + kEpsilon;
+		const float flowMag = sqrtf(flowDir.dot(flowDir));
+		Point2f normalizedFlowDir = flowDir / (flowMag + kEpsilon);
+		const float dot = bf.dot(normalizedFlowDir);
+		err -= kDirectionalRegularizationCoef * dot;
+	}
+	
+	float matchX      = x + flow_x;
+	float matchY      = y + flow_y;
+	float i0x         = I0x[((I0x_offset + y*I0x_step)>>2) + x];
+	float i0y         = I0y[((I0y_offset + y*I0y_step)>>2) + x];
+	float i1x		  = get_pix_bilinear32f_extend(I1x, I1x_step, I1x_offset, matchX, matchY);
+	float i1y		  = get_pix_bilinear32f_extend(I1y, I1y_step, I1y_offset, matchX, matchY);
+	float2 blurredFlow = blurred[((blurred_offset + y*blurred_step)>>2) + x];
+	float smoothness  = distance();*/
+	return 0.0f;
+} 
 
+__kernel void sweep_from_top_left(
+	__global const float* I0, int I0_step, int I0_offset,
+	__global const float* I1, int I1_step, int I1_offset,
+	__global const float* alpha0, int alpha0_step, int alpha0_offset,
+	__global const float* alpha1, int alpha1_step, int alpha1_offset,
+	__global const float* I0x, int I0x_step, int I0x_offset,
+	__global const float* I0y, int I0y_step, int I0y_offset,
+	__global const float* I1x, int I1x_step, int I1x_offset,
+	__global const float* I1y, int I1y_step, int I1y_offset,
+	__global const float2* blurred, int blurred_step, int blurred_offset,
+	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols,
+	int start_x, int start_y)
+{
 
+	int k = get_global_id(0);
+	int x = start_x + k;
+	int y = start_y - k;
+	
+	
+	float a0 = get_pix_bilinear32f_extend(alpha0, alpha0_step, alpha0_offset, flow_rows, flow_cols, x + 0.5, y + 0.5);
+	float a1 = get_pix_bilinear32f_extend(alpha1, alpha1_step, alpha1_offset, flow_rows, flow_cols, x - 0.5, y - 0.5);
+	mat2(flow, x, y) = (float2)(a0, a1);
+}
 
+/**
+ * @brief sweep from bottom right
+ */
+__kernel void sweep_from_bottom_right(
+	__global const float* I0, int I0_step, int I0_offset,
+	__global const float* I1, int I1_step, int I1_offset,
+	__global const float* alpha0, int alpha0_step, int alpha0_offset,
+	__global const float* alpha1, int alpha1_step, int alpha1_offset,
+	__global const float* I0x, int I0x_step, int I0x_offset,
+	__global const float* I0y, int I0y_step, int I0y_offset,
+	__global const float* I1x, int I1x_step, int I1x_offset,
+	__global const float* I1y, int I1y_step, int I1y_offset,
+	__global const float2* blurred, int blurred_step, int blurred_offset,
+	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols,
+	int start_x, int start_y) 
+{
 
+	int k = get_global_id(0);
+	int x = start_x + k;
+	int y = start_y - k;
+	int flow_index = ((flow_offset + y*flow_step) >> 3) + x;
+	flow[flow_index] = (float2)(x, y);
+}
 
