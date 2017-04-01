@@ -13,62 +13,72 @@
  * @brief float umat scaling
  */
 __kernel void scale_32FC1(
-	__global const float* src, int src_step, int src_offset, 
+	__global const float* src, int src_step, int src_offset, int src_rows, int src_cols, 
 	__global float* dst, int dst_step, int dst_offset,
 	float factor)
 {
 	int x = get_global_id(0);
     int y = get_global_id(1);
-	mat(dst, x, y) = factor * mat(src, x, y);
+	if (x < src_cols && y < src_rows) {
+		mat(dst, x, y) = factor * mat(src, x, y);
+	}
 	
 }
 __kernel void scale_32FC2(
-	__global const float2* src, int src_step, int src_offset, 
+	__global const float2* src, int src_step, int src_offset, int src_rows, int src_cols,
 	__global float2* dst, int dst_step, int dst_offset,
 	float factor)
 {
 	int x = get_global_id(0);
     int y = get_global_id(1);
-	mat2(dst, x, y) = factor * mat2(src, x, y);	
+	if (x < src_cols && y < src_rows) {
+		mat2(dst, x, y) = factor * mat2(src, x, y);
+	}
 }
 __kernel void scale_32FC4(
-	__global const float4* src, int src_step, int src_offset, 
+	__global const float4* src, int src_step, int src_offset, int src_rows, int src_cols,
 	__global float4* dst, int dst_step, int dst_offset,
 	float factor)
 {
 	int x = get_global_id(0);
     int y = get_global_id(1);
-	mat4(dst, x, y) = factor * mat4(src, x, y);	
+	if (x < src_cols && y < src_rows) {
+		mat4(dst, x, y) = factor * mat4(src, x, y);
+	}
 }
 
 /**
  * @brief motion detection
  */
 __kernel void motion_detection(
-	__global const char4* cur, int cur_step, int cur_offset,
+	__global const char4* cur, int cur_step, int cur_offset, int cur_rows, int cur_cols,
 	__global const char4* pre, int pre_step, int pre_offset,
 	__global float* motion, int motion_step, int motion_offset) 
 {
     int x = get_global_id(0);
     int y = get_global_id(1);
-	mat(motion, x, y) = 
-		(abs(mat(cur, x, y).x - mat(pre, x, y).x)
-		+ abs(mat(cur, x, y).y - mat(pre, x, y).y)
-		+ abs(mat(cur, x, y).z - mat(pre, x, y).z))/(3.0f*255.0f);
+	if (x < cur_cols && y < cur_rows) {
+		mat(motion, x, y) = 
+			(abs(mat(cur, x, y).x - mat(pre, x, y).x)
+			+ abs(mat(cur, x, y).y - mat(pre, x, y).y)
+			+ abs(mat(cur, x, y).z - mat(pre, x, y).z))/(3.0f*255.0f);
+	}
 }
 
 /**
  * @brief adjust flow toward previous
  */
 __kernel void adjust_flow_toward_previous(
-	__global float2* cur, int cur_step, int cur_offset,
+	__global float2* cur, int cur_step, int cur_offset, int cur_rows, int cur_cols,
 	__global const float2* pre, int pre_step, int pre_offset,
 	__global const float* motion, int motion_step, int motion_offset) 
 {
     int x = get_global_id(0);
     int y = get_global_id(1);
-	float w = 1.0f - mat(motion, x, y);
-	mat2(cur, x, y) = (1.0f - w) * mat2(cur, x, y) + w * mat2(pre, x, y);
+	if (x < cur_cols && y < cur_rows) {
+		float w = 1.0f - mat(motion, x, y);
+		mat2(cur, x, y) = (1.0f - w) * mat2(cur, x, y) + w * mat2(pre, x, y);
+	}
 }
 
 /**
@@ -97,9 +107,10 @@ __constant float kGradientStepSize = 0.5f;
 // __constant float kDownscaleFactor = 0.5f;
 __constant float kDirectionalRegularizationCoef = 0.0f;
 __constant int   kUseDirectionalRegularization = 0;
-__constant int   kMaxPercentage = 0;					// NOTES：this value can't be zero, and should be same as the one in host program
+//__constant int   kMaxPercentage = 0;					// NOTES：this value can't be zero, and should be same as the one in host program
 
-
+// for testing
+__constant int   kMaxPercentage = 20;
 float compute_patch_error(
 	__global const float* I0, int I0_step, int I0_offset, int I0_rows, int I0_cols, int i0x, int i0y, 
 	__global const float* I1, int I1_step, int I1_offset, int I1_rows, int I1_cols, int i1x, int i1y,
@@ -147,7 +158,7 @@ __kernel void estimate_flow(
 {
 	int i0x = get_global_id(0);
 	int i0y = get_global_id(1);
-	if (mat(alpha0, i0x, i0y) > kUpdateAlphaThreshold) {
+	if (i0x < I0_cols && i0y < I0_rows && mat(alpha0, i0x, i0y) > kUpdateAlphaThreshold) {
 		const float kFraction = 0.8f; // lower the fraction to increase affinity
 		float errorBest = kFraction * compute_patch_error(
 			I0, I0_step, I0_offset, I0_rows, I0_cols, i0x, i0y,
@@ -189,12 +200,14 @@ __kernel void alpha_flow_diffusion(
 	__global const float* alpha0, int alpha0_step, int alpha0_offset,
 	__global const float* alpha1, int alpha1_step, int alpha1_offset,
 	__global const float2* blurred, int blurred_step, int blurred_offset,
-	__global float2* flow, int flow_step, int flow_offset)
+	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols)
 {
 	int x = get_global_id(0);
 	int y = get_global_id(1);
-	float diffusionCoef = 1 - mat(alpha0, x, y) * mat(alpha1, x, y);
-	mat2(flow, x, y) = diffusionCoef * mat2(blurred, x, y) +  (1-diffusionCoef) * mat2(flow, x, y);
+	if (x < flow_cols && y < flow_rows) {
+		float diffusionCoef = 1 - mat(alpha0, x, y) * mat(alpha1, x, y);
+		mat2(flow, x, y) = diffusionCoef * mat2(blurred, x, y) +  (1-diffusionCoef) * mat2(flow, x, y);
+	}
 }
 
 float get_pix_bilinear32f_extend(
@@ -322,7 +335,10 @@ __kernel void sweep_from_top_left(
 	int x = start_x + k;
 	int y = start_y - k;
 	
-	if (mat(alpha0, x, y) > kUpdateAlphaThreshold && mat(alpha1, x, y) > kUpdateAlphaThreshold) {
+	if (k < min(flow_rows, flow_cols) 
+		&& mat(alpha0, x, y) > kUpdateAlphaThreshold 
+		&& mat(alpha1, x, y) > kUpdateAlphaThreshold) {
+		
 		float currErr = error_function(
 			I0x, I0x_step, I0x_offset,
 			I0y, I0y_step, I0y_offset,
@@ -342,7 +358,6 @@ __kernel void sweep_from_top_left(
 				flow, flow_step, flow_offset, flow_rows, flow_cols,
 				x, y, mat2(flow, x-1, y), &currErr);
 		}
-		
 		if (y > 0) {
 			propose_flow_update(
 				I0x, I0x_step, I0x_offset,
@@ -387,7 +402,10 @@ __kernel void sweep_from_bottom_right(
 	int x = start_x + k;
 	int y = start_y - k;
 	
-	if (mat(alpha0, x, y) > kUpdateAlphaThreshold && mat(alpha1, x, y) > kUpdateAlphaThreshold) {
+	if (k < min(flow_rows, flow_cols)
+		&& mat(alpha0, x, y) > kUpdateAlphaThreshold 
+		&& mat(alpha1, x, y) > kUpdateAlphaThreshold) {
+			
 		float currErr = error_function(
 			I0x, I0x_step, I0x_offset,
 			I0y, I0y_step, I0y_offset,
@@ -407,7 +425,6 @@ __kernel void sweep_from_bottom_right(
 				flow, flow_step, flow_offset, flow_rows, flow_cols,
 				x, y, mat2(flow, x+1, y), &currErr);
 		}
-		
 		if (y < flow_rows - 1) {
 			propose_flow_update(
 				I0x, I0x_step, I0x_offset,

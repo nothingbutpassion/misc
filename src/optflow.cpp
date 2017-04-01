@@ -42,35 +42,31 @@ CV_EXPORTS_W void oclScale(const UMat& src, UMat& dst, float factor) {
 	CV_Assert(src.type() == CV_32FC1 || src.type() == CV_32FC2 || src.type() == CV_32FC4 || src.type() == dst.type());
     string kernelName = string("scale") + (src.type() == CV_32FC1 ? "_32FC1" : src.type() == CV_32FC2 ? "_32FC2" : "_32FC4");
     ocl::Kernel k(kernelName.c_str(), ocl::imvt::optflow_oclsrc);
-    k.args(ocl::KernelArg::ReadWriteNoSize(src), ocl::KernelArg::ReadWriteNoSize(dst), ocl::KernelArg::Constant(&factor, sizeof(factor)));
+    k.args(ocl::KernelArg::ReadWrite(src), 
+        ocl::KernelArg::ReadWriteNoSize(dst), 
+        ocl::KernelArg::Constant(&factor, sizeof(factor)));
     size_t globalsize[] = {src.cols, src.rows};
-    size_t localsize[] = {1, 1};
-    adjustLocalSize(globalsize, localsize);
     k.run(2, globalsize, NULL, false);
 }
 
 // do motion detection vs. previous frame's images
 CV_EXPORTS_W void oclMotionDetection(const UMat& cur, const UMat& pre, UMat& motion) {
     ocl::Kernel k("motion_detection", ocl::imvt::optflow_oclsrc);
-    k.args(ocl::KernelArg::ReadOnlyNoSize(cur),
+    k.args(ocl::KernelArg::ReadOnly(cur),
         ocl::KernelArg::ReadOnlyNoSize(pre),
         ocl::KernelArg::WriteOnlyNoSize(motion));
     size_t globalsize[] = {motion.cols, motion.rows};
-    size_t localsize[] = {1, 1};
-    adjustLocalSize(globalsize, localsize);
     k.run(2, globalsize, NULL, false);
 }
 
 // adjust flow toward previous
 CV_EXPORTS_W void oclAdjustFlowTowardPrevious(const UMat& prevFlow, const UMat& motion, UMat& flow) {
     ocl::Kernel k("adjust_flow_toward_previous", ocl::imvt::optflow_oclsrc);
-    k.args(ocl::KernelArg::ReadWriteNoSize(flow),
+    k.args(ocl::KernelArg::ReadWrite(flow),
         ocl::KernelArg::ReadOnlyNoSize(prevFlow),
         ocl::KernelArg::ReadOnlyNoSize(motion));
     size_t globalsize[] = {flow.cols, flow.rows};
-    size_t localsize[] = {1, 1};
-    adjustLocalSize(globalsize, localsize);
-    k.run(2, globalsize, localsize, false);
+    k.run(2, globalsize, NULL, false);
 }
 
 // estimate the flow of each pixel in I0 by searching a rectangle
@@ -86,9 +82,7 @@ CV_EXPORTS_W void oclEstimateFlow(const UMat& I0, const UMat& I1, const UMat& al
         ocl::KernelArg::Constant(&box.width, sizeof(box.width)),
         ocl::KernelArg::Constant(&box.height, sizeof(box.height)));
     size_t globalsize[] = {flow.cols, flow.rows};
-    size_t localsize[] = {1, 1};
-    adjustLocalSize(globalsize, localsize);
-    k.run(2, globalsize, localsize, false);
+    k.run(2, globalsize, NULL, false);
 }
 
 // low alpha flow diffusion
@@ -97,11 +91,9 @@ CV_EXPORTS_W void oclAlphaFlowDiffusion(const UMat& alpha0, const UMat& alpha1, 
     k.args(ocl::KernelArg::ReadOnlyNoSize(alpha0), 
         ocl::KernelArg::ReadOnlyNoSize(alpha1),
         ocl::KernelArg::ReadOnlyNoSize(blurredFlow),
-        ocl::KernelArg::ReadWriteNoSize(flow));
+        ocl::KernelArg::ReadWrite(flow));
     size_t globalsize[] = {flow.cols, flow.rows};
-    size_t localsize[] = {1, 1};
-    adjustLocalSize(globalsize, localsize);
-    k.run(2, globalsize, localsize, false);
+    k.run(2, globalsize, NULL, false);
 }
 
 // sweep from top/left
@@ -129,9 +121,9 @@ CV_EXPORTS_W void oclSweepFromTopLeft(
             ocl::KernelArg::Constant(&start_y, sizeof(start_y)));
 
         size_t globalsize[] ={(i < minrc ? i+1 : I0.rows+I0.cols-1-i < minrc ? I0.rows+I0.cols-1-i : minrc), 1};
-        size_t localsize[] = {1, 1};
-        adjustLocalSize(globalsize, localsize);
-        k.run(1, globalsize, localsize, false);
+        //size_t localsize[] = {1, 1};
+        //adjustLocalSize(globalsize, localsize);
+        k.run(1, globalsize, NULL, false);
 		// cout << flow.getMat(ACCESS_READ) << endl;
     }
 }
@@ -159,9 +151,9 @@ CV_EXPORTS_W void oclSweepFromBottomRight(
             ocl::KernelArg::Constant(&start_x, sizeof(start_x)),
             ocl::KernelArg::Constant(&start_y, sizeof(start_y)));
         size_t globalsize[] ={(i < minrc ? i+1 : I0.rows+I0.cols-1-i < minrc ? I0.rows+I0.cols-1-i : minrc), 1};
-        size_t localsize[] = {1, 1};
-        adjustLocalSize(globalsize, localsize);
-        k.run(1, globalsize, localsize, false);
+        //size_t localsize[] = {1, 1};
+        //adjustLocalSize(globalsize, localsize);
+        k.run(1, globalsize, NULL, false);
 		//cout << flow.getMat(ACCESS_READ) << endl;
     }  
 }
@@ -424,7 +416,6 @@ struct OCLOptFlow {
 			kBlurredFlowSigma);
 
 		const cv::Size imgSize = I0.size();
-		
 		
 		/* @deleted
 		// sweep from top/left
