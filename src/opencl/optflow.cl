@@ -69,10 +69,8 @@ __constant float kGradientStepSize = 0.5f;
 // __constant float kDownscaleFactor = 0.5f;
 __constant float kDirectionalRegularizationCoef = 0.0f;
 __constant int   kUseDirectionalRegularization = 0;
-//__constant int   kMaxPercentage = 0;					// NOTES：this value can't be zero, and should be same as the one in host program
+__constant int   kMaxPercentage = 0;					// NOTES?this value can't be zero, and should be same as the one in host program
 
-// for testing
-__constant int   kMaxPercentage = 20;
 float compute_patch_error(
 	__global const float* I0, int I0_step, int I0_offset, int I0_rows, int I0_cols, int i0x, int i0y, 
 	__global const float* I1, int I1_step, int I1_offset, int I1_rows, int I1_cols, int i1x, int i1y,
@@ -172,6 +170,7 @@ __kernel void alpha_flow_diffusion(
 	}
 }
 
+
 float get_pix_bilinear32f_extend(
 	__global const float* img, int img_step, int img_offset, 
 	int img_rows, int img_cols,
@@ -228,7 +227,7 @@ void propose_flow_update(
 	__global const float* I1y, int I1y_step, int I1y_offset,
 	__global const float2* blurred, int blurred_step, int blurred_offset,
 	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols,
-	int updateX, const int updateY, float2 proposedFlow, float* currErr) 
+	int updateX, int updateY, float2 proposedFlow, float* currErr) 
 {
 	float proposalErr = error_function(
 		I0x, I0x_step, I0x_offset,
@@ -297,10 +296,10 @@ __kernel void sweep_from_top_left(
 	int x = start_x + k;
 	int y = start_y - k;
 	
-	if (k < min(flow_rows, flow_cols) 
+	if (0 <= x && x < flow_cols && 0 <= y && y < flow_rows 
 		&& mat(alpha0, x, y) > kUpdateAlphaThreshold 
 		&& mat(alpha1, x, y) > kUpdateAlphaThreshold) {
-		
+			
 		float currErr = error_function(
 			I0x, I0x_step, I0x_offset,
 			I0y, I0y_step, I0y_offset,
@@ -362,7 +361,7 @@ __kernel void sweep_from_bottom_right(
 	int x = start_x + k;
 	int y = start_y - k;
 	
-	if (k < min(flow_rows, flow_cols)
+	if (0 <= x && x < flow_cols && 0 <= y && y < flow_rows
 		&& mat(alpha0, x, y) > kUpdateAlphaThreshold 
 		&& mat(alpha1, x, y) > kUpdateAlphaThreshold) {
 			
