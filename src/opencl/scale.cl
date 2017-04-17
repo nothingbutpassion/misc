@@ -1,12 +1,25 @@
 /**
  * @brief the following macros are used for accessing img(x, y)
  */
-#define mat32fc1(img, x, y)	img##[((img##_offset + (y)*img##_step)>>2)+(x)]
-#define mat32fc2(img, x, y) img##[((img##_offset + (y)*img##_step)>>3)+(x)]
-#define mat32fc4(img, x, y) img##[((img##_offset + (y)*img##_step)>>4)+(x)]
-#define mat(img, x, y) 		mat32fc1(img, x, y)
-#define mat2(img, x, y) 	mat32fc2(img, x, y)
-#define mat4(img, x, y) 	mat32fc4(img, x, y)
+#define rmat8sc4(addr, x, y) ((__global const char4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat32fc1(addr, x, y) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat32fc2(addr, x, y) ((__global const float2*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat32fc4(addr, x, y) ((__global const float4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+
+#define wmat8sc4(addr, x, y) ((__global char4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat8uc4(addr, x, y) ((__global uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat32fc1(addr, x, y) ((__global float*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat32fc2(addr, x, y) ((__global float2*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat32fc4(addr, x, y) ((__global float4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+
+#define rmat(addr, x, y) 		rmat32fc1(addr, x, y)
+#define rmat2(addr, x, y) 	rmat32fc2(addr, x, y)
+#define rmat4(addr, x, y) 	rmat32fc4(addr, x, y)
+
+#define wmat(addr, x, y) 		wmat32fc1(addr, x, y)
+#define wmat2(addr, x, y) 	wmat32fc2(addr, x, y)
+#define wmat4(addr, x, y) 	wmat32fc4(addr, x, y)
 
 /**
  * @brief float umat scaling
@@ -19,7 +32,7 @@ __kernel void scale_32FC1(
 	int x = get_global_id(0);
     int y = get_global_id(1);
 	if (x < src_cols && y < src_rows) {
-		mat(dst, x, y) = factor * mat(src, x, y);
+		wmat(dst, x, y) = factor * rmat(src, x, y);
 	}
 	
 }
@@ -31,7 +44,7 @@ __kernel void scale_32FC2(
 	int x = get_global_id(0);
     int y = get_global_id(1);
 	if (x < src_cols && y < src_rows) {
-		mat2(dst, x, y) = factor * mat2(src, x, y);
+		wmat2(dst, x, y) = factor * rmat2(src, x, y);
 	}
 }
 __kernel void scale_32FC4(
@@ -42,6 +55,6 @@ __kernel void scale_32FC4(
 	int x = get_global_id(0);
     int y = get_global_id(1);
 	if (x < src_cols && y < src_rows) {
-		mat4(dst, x, y) = factor * mat4(src, x, y);
+		wmat4(dst, x, y) = factor * rmat4(src, x, y);
 	}
 }

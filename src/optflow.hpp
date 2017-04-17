@@ -13,6 +13,12 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgproc/types_c.h>
 
+#include "opencv2/imvt/trace.hpp"
+
+#define FORMAT(fmt, ...)        cv::imvt::format(fmt, __VA_ARGS__)
+#define TRACE_MAT(name, mat)    cv::imvt::MatTrace::instance().add("facebook", name, mat)
+
+
 namespace cv {
 namespace imvt {
 
@@ -83,12 +89,12 @@ struct OptFlow {
         cv::Size downscaleSize(rgba0byte.cols * kDownscaleFactor, rgba0byte.rows * kDownscaleFactor);
         resize(rgba0byte, rgba0byteDownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
         resize(rgba1byte, rgba1byteDownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
+
         Mat motion = Mat(downscaleSize, CV_32F);
         if (prevFlow.dims > 0) {
             usePrevFlowTemporalRegularization = true;
             resize(prevFlow, prevFlowDownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
             prevFlowDownscaled *= float(prevFlowDownscaled.rows) / float(prevFlow.rows);
-
             resize(prevI0BGRA, prevI0BGRADownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
             resize(prevI1BGRA, prevI1BGRADownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
 
@@ -111,15 +117,17 @@ struct OptFlow {
         cvtColor(rgba0byteDownscaled, I0Grey,  CV_BGRA2GRAY);
         cvtColor(rgba1byteDownscaled, I1Grey,  CV_BGRA2GRAY);
 
+
         I0Grey.convertTo(I0, CV_32F);
         I1Grey.convertTo(I1, CV_32F);
+        
         I0 /= 255.0f;
         I1 /= 255.0f;
         channels0[3].convertTo(alpha0, CV_32F);
         channels1[3].convertTo(alpha1, CV_32F);
         alpha0 /= 255.0f;
         alpha1 /= 255.0f;
-
+        
         GaussianBlur(I0, I0, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
         GaussianBlur(I1, I1, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
 
@@ -140,6 +148,7 @@ struct OptFlow {
         flow = Mat();
         
         for (int level = pyramidI0.size() - 1; level >= 0; --level) {
+            
             patchMatchPropagationAndSearch(
                 pyramidI0[level],
                 pyramidI1[level],
@@ -147,7 +156,7 @@ struct OptFlow {
                 pyramidAlpha1[level],
                 flow,
                 hint);
-
+            
             if (usePrevFlowTemporalRegularization) {
                 adjustFlowTowardPrevious(prevFlowPyramid[level], motionPyramid[level], flow);
             }
@@ -166,6 +175,8 @@ struct OptFlow {
             flow,
             Size(kFinalFlowBlurKernelWidth, kFinalFlowBlurKernelWidth),
             kFinalFlowBlurSigma);
+
+		TRACE_MAT("flow_final", flow);
     }
 
     // GPU Implementation
@@ -194,6 +205,7 @@ struct OptFlow {
         const Mat& blurredFlow,
         const float currErr) {
 
+        
         const static Point2f dx(kGradEpsilon, 0.0f);
         const static Point2f dy(0.0f, kGradEpsilon);
 
@@ -325,6 +337,7 @@ struct OptFlow {
     }
 
     // CPU Implementation
+    int patch_index = 0;
     void patchMatchPropagationAndSearch(
         const Mat& I0,
         const Mat& I1,
@@ -367,7 +380,7 @@ struct OptFlow {
             kBlurredFlowSigma);
 
         const cv::Size imgSize = I0.size();
-
+        
         // sweep from top/left
         for (int y = 0; y < imgSize.height; ++y) {
             for (int x = 0; x < imgSize.width; ++x) {
@@ -376,7 +389,7 @@ struct OptFlow {
                       if (x > 0) { proposeFlowUpdate(alpha0, alpha1, I0, I1, I0x, I0y, I1x, I1y, flow, blurredFlow, currErr, x, y, flow.at<Point2f>(y, x - 1)); }
                       if (y > 0) { proposeFlowUpdate(alpha0, alpha1, I0, I1, I0x, I0y, I1x, I1y, flow, blurredFlow, currErr, x, y, flow.at<Point2f>(y - 1, x)); }
                       flow.at<Point2f>(y, x) -= kGradientStepSize * errorGradient(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, x, y, flow, blurredFlow, currErr);
-                }
+				}
             }
         }
         medianBlur(flow, flow, kMedianBlurSize);
@@ -394,6 +407,10 @@ struct OptFlow {
         }
         medianBlur(flow, flow, kMedianBlurSize);
         lowAlphaFlowDiffusion(alpha0, alpha1, flow);
+
+        // @testing
+        static int patch_index = 0; 
+        TRACE_MAT(FORMAT("flow_%02d", patch_index++), flow);
     }
 
     // O (1)

@@ -1,29 +1,41 @@
-
 /**
- * @brief the following macros are defined for simplification
+ * @brief the following macros are used for accessing img(x, y)
  */
-#define mat32fc1(img, x, y)	img##[((img##_offset + (y)*img##_step)>>2)+(x)]
-#define mat32fc2(img, x, y) img##[((img##_offset + (y)*img##_step)>>3)+(x)]
-#define mat32fc4(img, x, y) img##[((img##_offset + (y)*img##_step)>>4)+(x)]
-#define mat(img, x, y) 		mat32fc1(img, x, y)
-#define mat2(img, x, y) 	mat32fc2(img, x, y)
-#define mat4(img, x, y) 	mat32fc4(img, x, y)
+#define rmat8sc4(addr, x, y) ((__global const char4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat32fc1(addr, x, y) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat32fc2(addr, x, y) ((__global const float2*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat32fc4(addr, x, y) ((__global const float4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+
+#define wmat8sc4(addr, x, y) ((__global char4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat8uc4(addr, x, y) ((__global uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat32fc1(addr, x, y) ((__global float*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat32fc2(addr, x, y) ((__global float2*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat32fc4(addr, x, y) ((__global float4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+
+#define rmat(addr, x, y) 		rmat32fc1(addr, x, y)
+#define rmat2(addr, x, y) 	rmat32fc2(addr, x, y)
+#define rmat4(addr, x, y) 	rmat32fc4(addr, x, y)
+
+#define wmat(addr, x, y) 		wmat32fc1(addr, x, y)
+#define wmat2(addr, x, y) 	wmat32fc2(addr, x, y)
+#define wmat4(addr, x, y) 	wmat32fc4(addr, x, y)
 
 /**
  * @brief motion detection
  */
 __kernel void motion_detection(
-	__global const char4* cur, int cur_step, int cur_offset, int cur_rows, int cur_cols,
-	__global const char4* pre, int pre_step, int pre_offset,
+	__global const uchar4* cur, int cur_step, int cur_offset, int cur_rows, int cur_cols,
+	__global const uchar4* pre, int pre_step, int pre_offset,
 	__global float* motion, int motion_step, int motion_offset) 
 {
     int x = get_global_id(0);
     int y = get_global_id(1);
 	if (x < cur_cols && y < cur_rows) {
-		mat(motion, x, y) = 
-			(abs(mat(cur, x, y).x - mat(pre, x, y).x)
-			+ abs(mat(cur, x, y).y - mat(pre, x, y).y)
-			+ abs(mat(cur, x, y).z - mat(pre, x, y).z))/(3.0f*255.0f);
+		wmat(motion, x, y) = 
+			( fabs((float)rmat8uc4(cur, x, y).x - (float)rmat8uc4(pre, x, y).x)
+			+ fabs((float)rmat8uc4(cur, x, y).y - (float)rmat8uc4(pre, x, y).y)
+			+ fabs((float)rmat8uc4(cur, x, y).z - (float)rmat8uc4(pre, x, y).z))/(3.0f*255.0f);
 	}
 }
 
@@ -38,8 +50,8 @@ __kernel void adjust_flow_toward_previous(
     int x = get_global_id(0);
     int y = get_global_id(1);
 	if (x < cur_cols && y < cur_rows) {
-		float w = 1.0f - mat(motion, x, y);
-		mat2(cur, x, y) = (1.0f - w) * mat2(cur, x, y) + w * mat2(pre, x, y);
+		float w = 1.0f - rmat(motion, x, y);
+		wmat2(cur, x, y) = (1.0f - w) * rmat2(cur, x, y) + w * rmat2(pre, x, y);
 	}
 }
 
@@ -90,8 +102,8 @@ float compute_patch_error(
 				int d1y = min(max(0, i1y + dy), I1_rows - 1);
 				int d1x = min(max(0, i1x + dx), I1_cols - 1);
 				
-				sad += fabs(mat(I0, d0x, d0y) - mat(I1, d1x, d1y));
-				alpha += mat(alpha0, d0x, d0y) * mat(alpha1, d1x, d1y);
+				sad += fabs(rmat(I0, d0x, d0y) - rmat(I1, d1x, d1y));
+				alpha += rmat(alpha0, d0x, d0y) * rmat(alpha1, d1x, d1y);
 			}
 		}
 	}
@@ -118,7 +130,7 @@ __kernel void estimate_flow(
 {
 	int i0x = get_global_id(0);
 	int i0y = get_global_id(1);
-	if (i0x < I0_cols && i0y < I0_rows && mat(alpha0, i0x, i0y) > kUpdateAlphaThreshold) {
+	if (i0x < I0_cols && i0y < I0_rows && rmat(alpha0, i0x, i0y) > kUpdateAlphaThreshold) {
 		const float kFraction = 0.8f; // lower the fraction to increase affinity
 		float errorBest = kFraction * compute_patch_error(
 			I0, I0_step, I0_offset, I0_rows, I0_cols, i0x, i0y,
@@ -149,7 +161,7 @@ __kernel void estimate_flow(
 			}
 		}	
 		// use the best match
-		mat2(flow, i0x, i0y) = (float2)(i1xBest - i0x, i1yBest - i0y);
+		wmat2(flow, i0x, i0y) = (float2)(i1xBest - i0x, i1yBest - i0y);
 	}
 }
 
@@ -165,8 +177,8 @@ __kernel void alpha_flow_diffusion(
 	int x = get_global_id(0);
 	int y = get_global_id(1);
 	if (x < flow_cols && y < flow_rows) {
-		float diffusionCoef = 1 - mat(alpha0, x, y) * mat(alpha1, x, y);
-		mat2(flow, x, y) = diffusionCoef * mat2(blurred, x, y) +  (1-diffusionCoef) * mat2(flow, x, y);
+		float diffusionCoef = 1 - rmat(alpha0, x, y) * rmat(alpha1, x, y);
+		wmat2(flow, x, y) = diffusionCoef * rmat2(blurred, x, y) +  (1-diffusionCoef) * rmat2(flow, x, y);
 	}
 }
 
@@ -182,10 +194,10 @@ float get_pix_bilinear32f_extend(
 	int y0 = convert_int_rtz(y);
 	float xR = x - x0;
 	float yR = y - y0;
-	float f00 = mat(img, x0, y0);
-	float f01 = mat(img, x0, y0+1);
-	float f10 = mat(img, x0+1, y0);
-	float f11 = mat(img, x0+1, y0+1);
+	float f00 = rmat(img, x0, y0);
+	float f01 = rmat(img, x0, y0+1);
+	float f10 = rmat(img, x0+1, y0);
+	float f11 = rmat(img, x0+1, y0+1);
 	return f00 + (f10 - f00)*xR + (f01 - f00)*yR + (f00 + f11 - f10 - f01)*xR*yR;
 }
 
@@ -200,11 +212,11 @@ float error_function(
 {	
 	float matchX      = x + flow.x;
 	float matchY      = y + flow.y;
-	float i0x         = mat(I0x, x, y);
-	float i0y         = mat(I0y, x, y);
+	float i0x         = rmat(I0x, x, y);
+	float i0y         = rmat(I0y, x, y);
 	float i1x         = get_pix_bilinear32f_extend(I1x, I1x_step, I1x_offset, flow_rows, flow_cols, matchX, matchY); // NOTES: flow, blurred, I0, I1, I0x, I0y, I1x, I1y has the same width/height
 	float i1y         = get_pix_bilinear32f_extend(I1y, I1y_step, I1y_offset, flow_rows, flow_cols, matchX, matchY);
-	float smoothness  =	distance(mat2(blurred, x, y), flow);
+	float smoothness  =	distance(rmat2(blurred, x, y), flow);
 	
 	float err = distance((float2)(i0x, i0y), (float2)(i1x, i1y))
 		+ smoothness * kSmoothnessCoef
@@ -212,7 +224,7 @@ float error_function(
 		+ kHorizontalRegularizationCoef * fabs(flow.x) / flow_cols;	
 		
 	if (kUseDirectionalRegularization) {
-		float2 blurredFlow = mat2(blurred, x, y);
+		float2 blurredFlow = rmat2(blurred, x, y);
 		const float kEpsilon = 0.001f;
 		// NOTES: ... dot(normalize(blurredFlow), normalize(flow)) is better ?
 		err -= kDirectionalRegularizationCoef * dot(blurredFlow/(length(blurredFlow) + kEpsilon), flow/(length(flow) + kEpsilon));
@@ -238,7 +250,7 @@ void propose_flow_update(
 		flow_rows, flow_cols,
 		updateX, updateY, proposedFlow);
 	if (proposalErr < (*currErr)) {
-		mat2(flow, updateX, updateY) = proposedFlow;
+		wmat2(flow, updateX, updateY) = proposedFlow;
 		*currErr = proposalErr;
 	}
 }
@@ -263,7 +275,7 @@ float2 error_gradient(
 		I1y, I1y_step, I1y_offset,
 		blurred, blurred_step, blurred_offset,
 		flow_rows, flow_cols,
-		x, y, mat2(flow, x, y)+dx);		
+		x, y, rmat2(flow, x, y)+dx);		
 	float fy = error_function(
 		I0x, I0x_step, I0x_offset,
 		I0y, I0y_step, I0y_offset,
@@ -271,8 +283,8 @@ float2 error_gradient(
 		I1y, I1y_step, I1y_offset,
 		blurred, blurred_step, blurred_offset,
 		flow_rows, flow_cols,
-		x, y, mat2(flow, x, y)+dy);
-		
+		x, y, rmat2(flow, x, y)+dy);
+	
 	return (float2)((fx - currErr)/kGradEpsilon, (fy - currErr)/kGradEpsilon);
 }
 
@@ -297,8 +309,8 @@ __kernel void sweep_from_top_left(
 	int y = start_y - k;
 	
 	if (0 <= x && x < flow_cols && 0 <= y && y < flow_rows 
-		&& mat(alpha0, x, y) > kUpdateAlphaThreshold 
-		&& mat(alpha1, x, y) > kUpdateAlphaThreshold) {
+		&& rmat(alpha0, x, y) > kUpdateAlphaThreshold 
+		&& rmat(alpha1, x, y) > kUpdateAlphaThreshold) {
 			
 		float currErr = error_function(
 			I0x, I0x_step, I0x_offset,
@@ -307,7 +319,7 @@ __kernel void sweep_from_top_left(
 			I1y, I1y_step, I1y_offset,
 			blurred, blurred_step, blurred_offset,
 			flow_rows, flow_cols,
-			x, y, mat2(flow, x, y));
+			x, y, rmat2(flow, x, y));
 			
 		if (x > 0) {
 			propose_flow_update(
@@ -317,7 +329,7 @@ __kernel void sweep_from_top_left(
 				I1y, I1y_step, I1y_offset,
 				blurred, blurred_step, blurred_offset,
 				flow, flow_step, flow_offset, flow_rows, flow_cols,
-				x, y, mat2(flow, x-1, y), &currErr);
+				x, y, rmat2(flow, x-1, y), &currErr);
 		}
 		if (y > 0) {
 			propose_flow_update(
@@ -327,17 +339,17 @@ __kernel void sweep_from_top_left(
 				I1y, I1y_step, I1y_offset,
 				blurred, blurred_step, blurred_offset,
 				flow, flow_step, flow_offset, flow_rows, flow_cols,
-				x, y, mat2(flow, x, y-1), &currErr);
+				x, y, rmat2(flow, x, y-1), &currErr);
 		}
 		
-		mat2(flow, x, y) -= kGradientStepSize * error_gradient(
-				I0x, I0x_step, I0x_offset,
-				I0y, I0y_step, I0y_offset,
-				I1x, I1x_step, I1x_offset,
-				I1y, I1y_step, I1y_offset,
-				blurred, blurred_step, blurred_offset,
-				flow, flow_step, flow_offset, flow_rows, flow_cols,
-				x, y, currErr);
+		wmat2(flow, x, y) -= kGradientStepSize * error_gradient(
+			I0x, I0x_step, I0x_offset,
+			I0y, I0y_step, I0y_offset,
+			I1x, I1x_step, I1x_offset,
+			I1y, I1y_step, I1y_offset,
+			blurred, blurred_step, blurred_offset,
+			flow, flow_step, flow_offset, flow_rows, flow_cols,
+			x, y, currErr);
 	}
 }
 
@@ -362,8 +374,8 @@ __kernel void sweep_from_bottom_right(
 	int y = start_y - k;
 	
 	if (0 <= x && x < flow_cols && 0 <= y && y < flow_rows
-		&& mat(alpha0, x, y) > kUpdateAlphaThreshold 
-		&& mat(alpha1, x, y) > kUpdateAlphaThreshold) {
+		&& rmat(alpha0, x, y) > kUpdateAlphaThreshold 
+		&& rmat(alpha1, x, y) > kUpdateAlphaThreshold) {
 			
 		float currErr = error_function(
 			I0x, I0x_step, I0x_offset,
@@ -372,7 +384,7 @@ __kernel void sweep_from_bottom_right(
 			I1y, I1y_step, I1y_offset,
 			blurred, blurred_step, blurred_offset,
 			flow_rows, flow_cols,
-			x, y, mat2(flow, x, y));
+			x, y, rmat2(flow, x, y));
 			
 		if (x < flow_cols - 1) {
 			propose_flow_update(
@@ -382,7 +394,7 @@ __kernel void sweep_from_bottom_right(
 				I1y, I1y_step, I1y_offset,
 				blurred, blurred_step, blurred_offset,
 				flow, flow_step, flow_offset, flow_rows, flow_cols,
-				x, y, mat2(flow, x+1, y), &currErr);
+				x, y, rmat2(flow, x+1, y), &currErr);
 		}
 		if (y < flow_rows - 1) {
 			propose_flow_update(
@@ -392,17 +404,17 @@ __kernel void sweep_from_bottom_right(
 				I1y, I1y_step, I1y_offset,
 				blurred, blurred_step, blurred_offset,
 				flow, flow_step, flow_offset, flow_rows, flow_cols,
-				x, y, mat2(flow, x, y+1), &currErr);
+				x, y, rmat2(flow, x, y+1), &currErr);
 		}
 		
-		mat2(flow, x, y) -= kGradientStepSize * error_gradient(
-				I0x, I0x_step, I0x_offset,
-				I0y, I0y_step, I0y_offset,
-				I1x, I1x_step, I1x_offset,
-				I1y, I1y_step, I1y_offset,
-				blurred, blurred_step, blurred_offset,
-				flow, flow_step, flow_offset, flow_rows, flow_cols,
-				x, y, currErr);
+		wmat2(flow, x, y) -= kGradientStepSize * error_gradient(
+			I0x, I0x_step, I0x_offset,
+			I0y, I0y_step, I0y_offset,
+			I1x, I1x_step, I1x_offset,
+			I1y, I1y_step, I1y_offset,
+			blurred, blurred_step, blurred_offset,
+			flow, flow_step, flow_offset, flow_rows, flow_cols,
+			x, y, currErr);
 	}	
 }
 

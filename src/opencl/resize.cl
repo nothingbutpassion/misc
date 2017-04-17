@@ -1,9 +1,25 @@
-#define mat32fc1(img, x, y)	img##[((img##_offset + (y)*img##_step)>>2)+(x)]
-#define mat32fc2(img, x, y) img##[((img##_offset + (y)*img##_step)>>3)+(x)]
-#define mat32fc4(img, x, y) img##[((img##_offset + (y)*img##_step)>>4)+(x)]
-#define mat(img, x, y) 		mat32fc1(img, x, y)
-#define mat2(img, x, y) 	mat32fc2(img, x, y)
-#define mat4(img, x, y) 	mat32fc4(img, x, y)
+/**
+ * @brief the following macros are used for accessing img(x, y)
+ */
+#define rmat8sc4(addr, x, y) ((__global const char4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat32fc1(addr, x, y) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat32fc2(addr, x, y) ((__global const float2*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat32fc4(addr, x, y) ((__global const float4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+
+#define wmat8sc4(addr, x, y) ((__global char4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat8uc4(addr, x, y) ((__global uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat32fc1(addr, x, y) ((__global float*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat32fc2(addr, x, y) ((__global float2*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat32fc4(addr, x, y) ((__global float4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+
+#define rmat(addr, x, y) 		rmat32fc1(addr, x, y)
+#define rmat2(addr, x, y) 	rmat32fc2(addr, x, y)
+#define rmat4(addr, x, y) 	rmat32fc4(addr, x, y)
+
+#define wmat(addr, x, y) 		wmat32fc1(addr, x, y)
+#define wmat2(addr, x, y) 	wmat32fc2(addr, x, y)
+#define wmat4(addr, x, y) 	wmat32fc4(addr, x, y)
 
 /**
  * @reference: opencv cpu implementation and https://en.wikipedia.org/wiki/Bicubic_interpolation
@@ -41,14 +57,14 @@ __kernel void resize_32FC1(
 		float v[4];
 		
 		for (int dy=-1; dy < 3; ++dy) {
-			u[0] = mat(src, max(x0 - 1, 0), 			min(max(0, y0 + dy), src_rows - 1));
-			u[1] = mat(src, x0, 						min(max(0, y0 + dy), src_rows - 1));	
-			u[2] = mat(src, x0 + 1, 					min(max(0, y0 + dy), src_rows - 1));
-			u[3] = mat(src, min(x0 + 2, src_cols - 1), 	min(max(0, y0 + dy), src_rows - 1));
+			u[0] = rmat(src, max(x0 - 1, 0), 			min(max(0, y0 + dy), src_rows - 1));
+			u[1] = rmat(src, x0, 						min(max(0, y0 + dy), src_rows - 1));	
+			u[2] = rmat(src, x0 + 1, 					min(max(0, y0 + dy), src_rows - 1));
+			u[3] = rmat(src, min(x0 + 2, src_cols - 1), 	min(max(0, y0 + dy), src_rows - 1));
 			v[dy+1] = get_bicubic_32fc1(u[0], u[1], u[2], u[3], xR);
 		}
 		
-		mat(dst, dst_x, dst_y) = get_bicubic_32fc1(v[0], v[1], v[2], v[3], yR);
+		wmat(dst, dst_x, dst_y) = get_bicubic_32fc1(v[0], v[1], v[2], v[3], yR);
 	}
 }
 
@@ -86,14 +102,14 @@ __kernel void resize_32FC2(
 		float2 v[4];
 		
 		for (int dy=-1; dy < 3; ++dy) {
-			u[0] = mat2(src, max(x0 - 1, 0), 			min(max(0, y0 + dy), src_rows - 1));
-			u[1] = mat2(src, x0, 						min(max(0, y0 + dy), src_rows - 1));	
-			u[2] = mat2(src, x0 + 1, 					min(max(0, y0 + dy), src_rows - 1));
-			u[3] = mat2(src, min(x0 + 2, src_cols - 1), min(max(0, y0 + dy), src_rows - 1));
+			u[0] = rmat2(src, max(x0 - 1, 0), 			min(max(0, y0 + dy), src_rows - 1));
+			u[1] = rmat2(src, x0, 						min(max(0, y0 + dy), src_rows - 1));	
+			u[2] = rmat2(src, x0 + 1, 					min(max(0, y0 + dy), src_rows - 1));
+			u[3] = rmat2(src, min(x0 + 2, src_cols - 1), min(max(0, y0 + dy), src_rows - 1));
 			v[dy+1] = get_bicubic_32fc2(u[0], u[1], u[2], u[3], xR);
 		}
 		
-		mat2(dst, dst_x, dst_y) = get_bicubic_32fc2(v[0], v[1], v[2], v[3], yR);
+		wmat2(dst, dst_x, dst_y) = get_bicubic_32fc2(v[0], v[1], v[2], v[3], yR);
 	}
 }
 
@@ -131,10 +147,10 @@ __kernel void resize_8UC4(
 		float4 v[4];
 		
 		for (int dy=-1; dy < 3; ++dy) {
-			u[0] = mat(src, max(x0 - 1, 0), 			min(max(0, y0 + dy), src_rows - 1));
-			u[1] = mat(src, x0, 						min(max(0, y0 + dy), src_rows - 1));	
-			u[2] = mat(src, x0 + 1, 					min(max(0, y0 + dy), src_rows - 1));
-			u[3] = mat(src, min(x0 + 2, src_cols - 1), 	min(max(0, y0 + dy), src_rows - 1));
+			u[0] = rmat8uc4(src, max(x0 - 1, 0), 			min(max(0, y0 + dy), src_rows - 1));
+			u[1] = rmat8uc4(src, x0, 						min(max(0, y0 + dy), src_rows - 1));	
+			u[2] = rmat8uc4(src, x0 + 1, 					min(max(0, y0 + dy), src_rows - 1));
+			u[3] = rmat8uc4(src, min(x0 + 2, src_cols - 1), 	min(max(0, y0 + dy), src_rows - 1));
 			v[dy+1] = get_bicubic_8uc4(
 				(float4)(u[0].x, u[0].y, u[0].z, u[0].w), 
 				(float4)(u[1].x, u[1].y, u[1].z, u[1].w),  
@@ -144,6 +160,6 @@ __kernel void resize_8UC4(
 		}
 		
 		float4 s = get_bicubic_8uc4(v[0], v[1], v[2], v[3], yR);
-		mat(dst, dst_x, dst_y) = (uchar4)(convert_uchar_sat(s.x), convert_uchar_sat(s.y), convert_uchar_sat(s.z), convert_uchar_sat(s.w)); 
+		wmat8uc4(dst, dst_x, dst_y) = (uchar4)(convert_uchar_sat(s.x), convert_uchar_sat(s.y), convert_uchar_sat(s.z), convert_uchar_sat(s.w)); 
 	}
 }
