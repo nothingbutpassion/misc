@@ -211,17 +211,17 @@ struct OCLOptFlow {
 		
 		if (prevFlow.dims > 0) {
 			usePrevFlowTemporalRegularization = true;
-			resize(prevFlow, prevFlowDownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
-            //oclResize(prevFlow, prevFlowDownscaled, downscaleSize);
+			//resize(prevFlow, prevFlowDownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
+            oclResize(prevFlow, prevFlowDownscaled, downscaleSize);
             
 			/* @deleted 
 			prevFlowDownscaled *= float(prevFlowDownscaled.rows) / float(prevFlow.rows);
             */
             oclScale(prevFlowDownscaled, prevFlowDownscaled, float(prevFlowDownscaled.rows)/float(prevFlow.rows)); 
-            resize(prevI0BGRA, prevI0BGRADownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
-			resize(prevI1BGRA, prevI1BGRADownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
-            //oclResize(prevI0BGRA, prevI0BGRADownscaled, downscaleSize);
-            //oclResize(prevI1BGRA, prevI1BGRADownscaled, downscaleSize);
+            //resize(prevI0BGRA, prevI0BGRADownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
+			//resize(prevI1BGRA, prevI1BGRADownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
+            oclResize(prevI0BGRA, prevI0BGRADownscaled, downscaleSize);
+            oclResize(prevI1BGRA, prevI1BGRADownscaled, downscaleSize);
 
 			// do motion detection vs. previous frame's images
 			/* @deleted
@@ -262,9 +262,18 @@ struct OCLOptFlow {
 		*/
 		oclScale(alpha0, alpha0, 1.0f/255.0f);
 		oclScale(alpha1, alpha1, 1.0f/255.0f);
-        
+
+        /* @deleted
 		GaussianBlur(I0, I0, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
 		GaussianBlur(I1, I1, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
+		*/
+        {
+        UMat I0Tmp, I1Tmp;
+        GaussianBlur(I0, I0Tmp, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
+    	GaussianBlur(I1, I1Tmp, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
+    	I0 = I0Tmp;
+        I1 = I1Tmp;
+        }
 
 		vector<UMat> pyramidI0 = buildPyramid(I0);
 		vector<UMat> pyramidI1 = buildPyramid(I1);
@@ -304,11 +313,17 @@ struct OCLOptFlow {
 			}
 			
 			if (level > 0) { // scale the flow up to the next size
-                
-                UMat flowResized;
-				resize(flow, flowResized, pyramidI0[level - 1].size(), 0, 0, CV_INTER_CUBIC);
-                flow = flowResized;
-                //oclResize(flow, flow, pyramidI0[level - 1].size());
+                {
+                UMat flowTmp;
+				resize(flow, flowTmp, pyramidI0[level - 1].size(), 0, 0, CV_INTER_CUBIC);
+                flow = flowTmp;
+                }
+        
+                //{
+                //UMat flowTmp;    
+                //oclResize(flow, flowTmp, pyramidI0[level - 1].size());
+                //flow = flowTmp;
+                //}
 				
 				/* @deleted
 				flow *= (1.0f / kPyrScaleFactor);
@@ -319,16 +334,32 @@ struct OCLOptFlow {
 		}
 		
 		// scale the flow result back to full size
-		resize(flow, flow, originalSize, 0, 0, CV_INTER_LINEAR);
 		/* @deleted
+		resize(flow, flow, originalSize, 0, 0, CV_INTER_LINEAR);
 		flow *= (1.0f / kDownscaleFactor);
 		*/
+        {      
+        UMat flowTmp;
+        resize(flow, flowTmp, originalSize, 0, 0, CV_INTER_LINEAR);
+        flow = flowTmp;
+        }
 		oclScale(flow, flow, 1.0f/kDownscaleFactor);
+        /* @deleted
 		GaussianBlur(
 			flow,
 			flow,
 			Size(kFinalFlowBlurKernelWidth, kFinalFlowBlurKernelWidth),
 			kFinalFlowBlurSigma);
+		*/
+        {
+        UMat flowTmp;
+        GaussianBlur(
+    		flow,
+			flowTmp,
+    		Size(kFinalFlowBlurKernelWidth, kFinalFlowBlurKernelWidth),
+    		kFinalFlowBlurSigma);
+        flow = flowTmp;
+        }
 
         TRACE_MAT("flow_final", flow); 
 	}
@@ -368,10 +399,23 @@ struct OCLOptFlow {
 
 		// blur gradients
 		const cv::Size kGradientBlurSize(kGradientBlurKernelWidth, kGradientBlurKernelWidth);
+        /* @deleted
 		GaussianBlur(I0x, I0x, kGradientBlurSize, kGradientBlurSigma);
 		GaussianBlur(I0y, I0y, kGradientBlurSize, kGradientBlurSigma);
 		GaussianBlur(I1x, I1x, kGradientBlurSize, kGradientBlurSigma);
 		GaussianBlur(I1y, I1y, kGradientBlurSize, kGradientBlurSigma);
+		*/
+        {
+		UMat I0xTmp, I0yTmp, I1xTmp, I1yTmp;
+		GaussianBlur(I0x, I0xTmp, kGradientBlurSize, kGradientBlurSigma);
+		GaussianBlur(I0y, I0yTmp, kGradientBlurSize, kGradientBlurSigma);
+		GaussianBlur(I1x, I1xTmp, kGradientBlurSize, kGradientBlurSigma);
+		GaussianBlur(I1y, I1yTmp, kGradientBlurSize, kGradientBlurSigma);
+        I0x = I0xTmp;
+        I0y = I0yTmp;
+        I1x = I1xTmp;
+        I1y = I1yTmp;
+        }
 		
 		if (flow.empty()) {
 			// initialize to all zeros
@@ -405,7 +449,14 @@ struct OCLOptFlow {
 		}
 		*/
 		oclSweepFromTopLeft(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+        /* @deleted
         medianBlur(flow, flow, kMedianBlurSize);
+        */
+        {
+        UMat flowTmp;
+        medianBlur(flow, flowTmp, kMedianBlurSize);
+        flow = flowTmp;
+        }
 
 		/* @deleted
 		// sweep from bottom/right
@@ -421,8 +472,15 @@ struct OCLOptFlow {
 		}
 		*/
         oclSweepFromBottomRight(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+         /* @deleted
 		medianBlur(flow, flow, kMedianBlurSize);
-        
+		*/
+        {
+        UMat flowTmp;
+        medianBlur(flow, flowTmp, kMedianBlurSize);
+        flow = flowTmp;
+        }
+         
 		lowAlphaFlowDiffusion(alpha0, alpha1, flow);
 
         // @testing
