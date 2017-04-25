@@ -57,10 +57,10 @@ __kernel void resize_32FC1(
 		float v[4];
 		
 		for (int dy=-1; dy < 3; ++dy) {
-			u[0] = rmat(src, max(x0 - 1, 0), 			min(max(0, y0 + dy), src_rows - 1));
-			u[1] = rmat(src, x0, 						min(max(0, y0 + dy), src_rows - 1));	
-			u[2] = rmat(src, x0 + 1, 					min(max(0, y0 + dy), src_rows - 1));
-			u[3] = rmat(src, min(x0 + 2, src_cols - 1), 	min(max(0, y0 + dy), src_rows - 1));
+			u[0] = rmat(src, min(max(x0 - 1, 0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));
+			u[1] = rmat(src, min(max(x0,     0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));	
+			u[2] = rmat(src, min(max(x0 + 1, 0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));
+			u[3] = rmat(src, min(max(x0 + 2, 0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));
 			v[dy+1] = get_bicubic_32fc1(u[0], u[1], u[2], u[3], xR);
 		}
 		
@@ -102,10 +102,10 @@ __kernel void resize_32FC2(
 		float2 v[4];
 		
 		for (int dy=-1; dy < 3; ++dy) {
-			u[0] = rmat2(src, max(x0 - 1, 0), 			min(max(0, y0 + dy), src_rows - 1));
-			u[1] = rmat2(src, x0, 						min(max(0, y0 + dy), src_rows - 1));	
-			u[2] = rmat2(src, x0 + 1, 					min(max(0, y0 + dy), src_rows - 1));
-			u[3] = rmat2(src, min(x0 + 2, src_cols - 1), min(max(0, y0 + dy), src_rows - 1));
+			u[0] = rmat2(src, min(max(x0 - 1, 0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));
+			u[1] = rmat2(src, min(max(x0,     0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));	
+			u[2] = rmat2(src, min(max(x0 + 1, 0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));
+			u[3] = rmat2(src, min(max(x0 + 2, 0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));
 			v[dy+1] = get_bicubic_32fc2(u[0], u[1], u[2], u[3], xR);
 		}
 		
@@ -147,10 +147,10 @@ __kernel void resize_8UC4(
 		float4 v[4];
 		
 		for (int dy=-1; dy < 3; ++dy) {
-			u[0] = rmat8uc4(src, max(x0 - 1, 0), 			min(max(0, y0 + dy), src_rows - 1));
-			u[1] = rmat8uc4(src, x0, 						min(max(0, y0 + dy), src_rows - 1));	
-			u[2] = rmat8uc4(src, x0 + 1, 					min(max(0, y0 + dy), src_rows - 1));
-			u[3] = rmat8uc4(src, min(x0 + 2, src_cols - 1), 	min(max(0, y0 + dy), src_rows - 1));
+			u[0] = rmat8uc4(src, min(max(x0 - 1, 0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));
+			u[1] = rmat8uc4(src, min(max(x0,     0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));	
+			u[2] = rmat8uc4(src, min(max(x0 + 1, 0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));
+			u[3] = rmat8uc4(src, min(max(x0 + 2, 0), src_cols-1), 	min(max(0, y0 + dy), src_rows - 1));
 			v[dy+1] = get_bicubic_8uc4(
 				(float4)(u[0].x, u[0].y, u[0].z, u[0].w), 
 				(float4)(u[1].x, u[1].y, u[1].z, u[1].w),  
@@ -158,6 +158,7 @@ __kernel void resize_8UC4(
 				(float4)(u[3].x, u[3].y, u[3].z, u[3].w),  
 				xR);
 		}
+		
 		
 		float4 s = get_bicubic_8uc4(v[0], v[1], v[2], v[3], yR);
 		wmat8uc4(dst, dst_x, dst_y) = (uchar4)(convert_uchar_sat(s.x), convert_uchar_sat(s.y), convert_uchar_sat(s.z), convert_uchar_sat(s.w)); 

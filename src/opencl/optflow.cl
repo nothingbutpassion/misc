@@ -285,7 +285,8 @@ float2 error_gradient(
 		flow_rows, flow_cols,
 		x, y, rmat2(flow, x, y)+dy);
 	
-	return (float2)((fx - currErr)/kGradEpsilon, (fy - currErr)/kGradEpsilon);
+	//return (float2)((fx - currErr)/kGradEpsilon, (fy - currErr)/kGradEpsilon);
+	return (float2)((fx - currErr)*1000, (fy - currErr)*1000);
 }
 
 /**
@@ -311,7 +312,6 @@ __kernel void sweep_from_top_left(
 	if (0 <= x && x < flow_cols && 0 <= y && y < flow_rows 
 		&& rmat(alpha0, x, y) > kUpdateAlphaThreshold 
 		&& rmat(alpha1, x, y) > kUpdateAlphaThreshold) {
-			
 		float currErr = error_function(
 			I0x, I0x_step, I0x_offset,
 			I0y, I0y_step, I0y_offset,
@@ -376,7 +376,6 @@ __kernel void sweep_from_bottom_right(
 	if (0 <= x && x < flow_cols && 0 <= y && y < flow_rows
 		&& rmat(alpha0, x, y) > kUpdateAlphaThreshold 
 		&& rmat(alpha1, x, y) > kUpdateAlphaThreshold) {
-			
 		float currErr = error_function(
 			I0x, I0x_step, I0x_offset,
 			I0y, I0y_step, I0y_offset,
@@ -415,6 +414,208 @@ __kernel void sweep_from_bottom_right(
 			blurred, blurred_step, blurred_offset,
 			flow, flow_step, flow_offset, flow_rows, flow_cols,
 			x, y, currErr);
-	}	
+	}
 }
+
+
+
+__kernel void sweep_from_left(
+	__global const float* I0, int I0_step, int I0_offset,
+	__global const float* I1, int I1_step, int I1_offset,
+	__global const float* alpha0, int alpha0_step, int alpha0_offset,
+	__global const float* alpha1, int alpha1_step, int alpha1_offset,
+	__global const float* I0x, int I0x_step, int I0x_offset,
+	__global const float* I0y, int I0y_step, int I0y_offset,
+	__global const float* I1x, int I1x_step, int I1x_offset,
+	__global const float* I1y, int I1y_step, int I1y_offset,
+	__global const float2* blurred, int blurred_step, int blurred_offset,
+	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols)
+{
+	int y = get_global_id(0);
+	if (y < flow_rows) {
+		for (int x=0; x < flow_cols; ++x) {
+			if (rmat(alpha0, x, y) > kUpdateAlphaThreshold && rmat(alpha1, x, y) > kUpdateAlphaThreshold) {
+				float currErr = error_function(
+					I0x, I0x_step, I0x_offset,
+					I0y, I0y_step, I0y_offset,
+					I1x, I1x_step, I1x_offset,
+					I1y, I1y_step, I1y_offset,
+					blurred, blurred_step, blurred_offset,
+					flow_rows, flow_cols,
+					x, y, rmat2(flow, x, y));
+					
+				if (x > 0) {
+					propose_flow_update(
+						I0x, I0x_step, I0x_offset,
+						I0y, I0y_step, I0y_offset,
+						I1x, I1x_step, I1x_offset,
+						I1y, I1y_step, I1y_offset,
+						blurred, blurred_step, blurred_offset,
+						flow, flow_step, flow_offset, flow_rows, flow_cols,
+						x, y, rmat2(flow, x-1, y), &currErr);
+				}
+				
+				wmat2(flow, x, y) -= kGradientStepSize * error_gradient(
+					I0x, I0x_step, I0x_offset,
+					I0y, I0y_step, I0y_offset,
+					I1x, I1x_step, I1x_offset,
+					I1y, I1y_step, I1y_offset,
+					blurred, blurred_step, blurred_offset,
+					flow, flow_step, flow_offset, flow_rows, flow_cols,
+					x, y, currErr);
+			}
+		}
+	}
+}
+
+
+__kernel void sweep_from_right(
+	__global const float* I0, int I0_step, int I0_offset,
+	__global const float* I1, int I1_step, int I1_offset,
+	__global const float* alpha0, int alpha0_step, int alpha0_offset,
+	__global const float* alpha1, int alpha1_step, int alpha1_offset,
+	__global const float* I0x, int I0x_step, int I0x_offset,
+	__global const float* I0y, int I0y_step, int I0y_offset,
+	__global const float* I1x, int I1x_step, int I1x_offset,
+	__global const float* I1y, int I1y_step, int I1y_offset,
+	__global const float2* blurred, int blurred_step, int blurred_offset,
+	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols)
+{
+	int y = flow_rows - 1 - get_global_id(0);
+	if (y > 0) {
+		for (int x=flow_cols-1; x >=0; --x) {
+			if (rmat(alpha0, x, y) > kUpdateAlphaThreshold && rmat(alpha1, x, y) > kUpdateAlphaThreshold) {
+				float currErr = error_function(
+					I0x, I0x_step, I0x_offset,
+					I0y, I0y_step, I0y_offset,
+					I1x, I1x_step, I1x_offset,
+					I1y, I1y_step, I1y_offset,
+					blurred, blurred_step, blurred_offset,
+					flow_rows, flow_cols,
+					x, y, rmat2(flow, x, y));
+					
+				if (x < flow_cols-1) {
+					propose_flow_update(
+						I0x, I0x_step, I0x_offset,
+						I0y, I0y_step, I0y_offset,
+						I1x, I1x_step, I1x_offset,
+						I1y, I1y_step, I1y_offset,
+						blurred, blurred_step, blurred_offset,
+						flow, flow_step, flow_offset, flow_rows, flow_cols,
+						x, y, rmat2(flow, x+1, y), &currErr);
+				}
+				
+				wmat2(flow, x, y) -= kGradientStepSize * error_gradient(
+					I0x, I0x_step, I0x_offset,
+					I0y, I0y_step, I0y_offset,
+					I1x, I1x_step, I1x_offset,
+					I1y, I1y_step, I1y_offset,
+					blurred, blurred_step, blurred_offset,
+					flow, flow_step, flow_offset, flow_rows, flow_cols,
+					x, y, currErr);
+			}
+		}
+	}
+}
+
+__kernel void sweep_from_top(
+	__global const float* I0, int I0_step, int I0_offset,
+	__global const float* I1, int I1_step, int I1_offset,
+	__global const float* alpha0, int alpha0_step, int alpha0_offset,
+	__global const float* alpha1, int alpha1_step, int alpha1_offset,
+	__global const float* I0x, int I0x_step, int I0x_offset,
+	__global const float* I0y, int I0y_step, int I0y_offset,
+	__global const float* I1x, int I1x_step, int I1x_offset,
+	__global const float* I1y, int I1y_step, int I1y_offset,
+	__global const float2* blurred, int blurred_step, int blurred_offset,
+	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols)
+{
+	int x = get_global_id(0);
+	if (x < flow_cols) {
+		for (int y=0; y < flow_rows; ++y) {
+			if (rmat(alpha0, x, y) > kUpdateAlphaThreshold && rmat(alpha1, x, y) > kUpdateAlphaThreshold) {
+				float currErr = error_function(
+					I0x, I0x_step, I0x_offset,
+					I0y, I0y_step, I0y_offset,
+					I1x, I1x_step, I1x_offset,
+					I1y, I1y_step, I1y_offset,
+					blurred, blurred_step, blurred_offset,
+					flow_rows, flow_cols,
+					x, y, rmat2(flow, x, y));
+					
+				if (y > 0) {
+					propose_flow_update(
+						I0x, I0x_step, I0x_offset,
+						I0y, I0y_step, I0y_offset,
+						I1x, I1x_step, I1x_offset,
+						I1y, I1y_step, I1y_offset,
+						blurred, blurred_step, blurred_offset,
+						flow, flow_step, flow_offset, flow_rows, flow_cols,
+						x, y, rmat2(flow, x, y-1), &currErr);
+				}
+				
+				wmat2(flow, x, y) -= kGradientStepSize * error_gradient(
+					I0x, I0x_step, I0x_offset,
+					I0y, I0y_step, I0y_offset,
+					I1x, I1x_step, I1x_offset,
+					I1y, I1y_step, I1y_offset,
+					blurred, blurred_step, blurred_offset,
+					flow, flow_step, flow_offset, flow_rows, flow_cols,
+					x, y, currErr);
+			}
+		}
+	}
+}
+
+__kernel void sweep_from_bottom(
+	__global const float* I0, int I0_step, int I0_offset,
+	__global const float* I1, int I1_step, int I1_offset,
+	__global const float* alpha0, int alpha0_step, int alpha0_offset,
+	__global const float* alpha1, int alpha1_step, int alpha1_offset,
+	__global const float* I0x, int I0x_step, int I0x_offset,
+	__global const float* I0y, int I0y_step, int I0y_offset,
+	__global const float* I1x, int I1x_step, int I1x_offset,
+	__global const float* I1y, int I1y_step, int I1y_offset,
+	__global const float2* blurred, int blurred_step, int blurred_offset,
+	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols)
+{
+	int x = flow_cols - 1 - get_global_id(0);
+	if (x > 0) {
+		for (int y=flow_rows-1; y >=0; --y) {
+			if (rmat(alpha0, x, y) > kUpdateAlphaThreshold && rmat(alpha1, x, y) > kUpdateAlphaThreshold) {
+				float currErr = error_function(
+					I0x, I0x_step, I0x_offset,
+					I0y, I0y_step, I0y_offset,
+					I1x, I1x_step, I1x_offset,
+					I1y, I1y_step, I1y_offset,
+					blurred, blurred_step, blurred_offset,
+					flow_rows, flow_cols,
+					x, y, rmat2(flow, x, y));
+					
+				if (y < flow_rows-1) {
+					propose_flow_update(
+						I0x, I0x_step, I0x_offset,
+						I0y, I0y_step, I0y_offset,
+						I1x, I1x_step, I1x_offset,
+						I1y, I1y_step, I1y_offset,
+						blurred, blurred_step, blurred_offset,
+						flow, flow_step, flow_offset, flow_rows, flow_cols,
+						x, y, rmat2(flow, x, y+1), &currErr);
+				}
+				
+				wmat2(flow, x, y) -= kGradientStepSize * error_gradient(
+					I0x, I0x_step, I0x_offset,
+					I0y, I0y_step, I0y_offset,
+					I1x, I1x_step, I1x_offset,
+					I1y, I1y_step, I1y_offset,
+					blurred, blurred_step, blurred_offset,
+					flow, flow_step, flow_offset, flow_rows, flow_cols,
+					x, y, currErr);
+			}
+		}
+	}
+}
+
+
+
 

@@ -22,7 +22,7 @@
 #define wmat4(addr, x, y) 	wmat32fc4(addr, x, y)
 
 /**
- * @brief float umat scaling
+ * @brief float umat scaling 
  */
 __kernel void scale_32FC1(
 	__global const float* src, int src_step, int src_offset, int src_rows, int src_cols, 
@@ -56,5 +56,41 @@ __kernel void scale_32FC4(
     int y = get_global_id(1);
 	if (x < src_cols && y < src_rows) {
 		wmat4(dst, x, y) = factor * rmat4(src, x, y);
+	}
+}
+
+
+/**
+ * @brief float umat scaling self
+ */
+__kernel void scale_self_32FC1(
+	__global float* src, int src_step, int src_offset, int src_rows, int src_cols, 
+	float factor)
+{
+	int x = get_global_id(0);
+    int y = get_global_id(1);
+	if (x < src_cols && y < src_rows) {
+		wmat(src, x, y) *= factor;
+	}
+	
+}
+__kernel void scale_self_32FC2(
+	__global float2* src, int src_step, int src_offset, int src_rows, int src_cols,
+	float factor)
+{
+	int x = get_global_id(0);
+    int y = get_global_id(1);
+	if (x < src_cols && y < src_rows) {
+		wmat2(src, x, y) *= factor;
+	}
+}
+__kernel void scale_self_32FC4(
+	__global float4* src, int src_step, int src_offset, int src_rows, int src_cols,
+	float factor)
+{
+	int x = get_global_id(0);
+    int y = get_global_id(1);
+	if (x < src_cols && y < src_rows) {
+		wmat4(src, x, y) *= factor;
 	}
 }

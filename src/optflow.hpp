@@ -13,12 +13,6 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgproc/types_c.h>
 
-#include "opencv2/imvt/trace.hpp"
-
-#define FORMAT(fmt, ...)        cv::imvt::format(fmt, __VA_ARGS__)
-#define TRACE_MAT(name, mat)    cv::imvt::MatTrace::instance().add("facebook", name, mat)
-
-
 namespace cv {
 namespace imvt {
 
@@ -175,8 +169,6 @@ struct OptFlow {
             flow,
             Size(kFinalFlowBlurKernelWidth, kFinalFlowBlurKernelWidth),
             kFinalFlowBlurSigma);
-
-		TRACE_MAT("flow_final", flow);
     }
 
     // GPU Implementation
@@ -337,7 +329,6 @@ struct OptFlow {
     }
 
     // CPU Implementation
-    int patch_index = 0;
     void patchMatchPropagationAndSearch(
         const Mat& I0,
         const Mat& I1,
@@ -392,6 +383,26 @@ struct OptFlow {
 				}
             }
         }
+        /* @changed
+        for (int y = 0; y < imgSize.height; ++y) {
+            for (int x = 0; x < imgSize.width; ++x) {
+                if (alpha0.at<float>(y, x) > kUpdateAlphaThreshold && alpha1.at<float>(y, x) > kUpdateAlphaThreshold) {
+                      float currErr = errorFunction(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, x, y, flow, blurredFlow, flow.at<Point2f>(y, x));
+                      if (x > 0) { proposeFlowUpdate(alpha0, alpha1, I0, I1, I0x, I0y, I1x, I1y, flow, blurredFlow, currErr, x, y, flow.at<Point2f>(y, x - 1)); }
+                      flow.at<Point2f>(y, x) -= kGradientStepSize * errorGradient(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, x, y, flow, blurredFlow, currErr);
+				}
+            }
+        }
+        for (int y = 0; y < imgSize.height; ++y) {
+            for (int x = 0; x < imgSize.width; ++x) {
+                if (alpha0.at<float>(y, x) > kUpdateAlphaThreshold && alpha1.at<float>(y, x) > kUpdateAlphaThreshold) {
+                      float currErr = errorFunction(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, x, y, flow, blurredFlow, flow.at<Point2f>(y, x));
+                      if (y > 0) { proposeFlowUpdate(alpha0, alpha1, I0, I1, I0x, I0y, I1x, I1y, flow, blurredFlow, currErr, x, y, flow.at<Point2f>(y - 1, x)); }
+                      flow.at<Point2f>(y, x) -= kGradientStepSize * errorGradient(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, x, y, flow, blurredFlow, currErr);
+                }
+            }
+        }
+        */
         medianBlur(flow, flow, kMedianBlurSize);
 
         // sweep from bottom/right
@@ -405,12 +416,29 @@ struct OptFlow {
                     }
               }
         }
+        
+        /* @changed
+        for (int y = imgSize.height - 1; y >= 0; --y) {
+              for (int x = imgSize.width - 1; x >= 0; --x) {
+                    if (alpha0.at<float>(y, x) > kUpdateAlphaThreshold && alpha1.at<float>(y, x) > kUpdateAlphaThreshold) {
+                          float currErr = errorFunction(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, x, y, flow, blurredFlow, flow.at<Point2f>(y, x));
+                          if (x < imgSize.width - 1)  { proposeFlowUpdate(alpha0, alpha1, I0, I1, I0x, I0y, I1x, I1y, flow, blurredFlow, currErr, x, y, flow.at<Point2f>(y, x + 1)); }
+                          flow.at<Point2f>(y, x) -= kGradientStepSize * errorGradient(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, x, y, flow, blurredFlow, currErr);
+                    }
+              }
+        }
+        for (int y = imgSize.height - 1; y >= 0; --y) {
+              for (int x = imgSize.width - 1; x >= 0; --x) {
+                    if (alpha0.at<float>(y, x) > kUpdateAlphaThreshold && alpha1.at<float>(y, x) > kUpdateAlphaThreshold) {
+                          float currErr = errorFunction(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, x, y, flow, blurredFlow, flow.at<Point2f>(y, x));
+                          if (y < imgSize.height - 1) { proposeFlowUpdate(alpha0, alpha1, I0, I1, I0x, I0y, I1x, I1y, flow, blurredFlow, currErr, x, y, flow.at<Point2f>(y + 1, x)); }
+                          flow.at<Point2f>(y, x) -= kGradientStepSize * errorGradient(I0, I1, alpha0, alpha1, I0x, I0y, I1x, I1y, x, y, flow, blurredFlow, currErr);
+                    }
+              }
+        }
+        */
         medianBlur(flow, flow, kMedianBlurSize);
         lowAlphaFlowDiffusion(alpha0, alpha1, flow);
-
-        // @testing
-        static int patch_index = 0; 
-        TRACE_MAT(FORMAT("flow_%02d", patch_index++), flow);
     }
 
     // O (1)
@@ -537,5 +565,5 @@ struct OptFlow {
 };
 
 
-} // namespace optical_flow
-} // namespace surround360
+} // namespace imvt
+} // namespace cv

@@ -59,6 +59,22 @@ CV_EXPORTS_W void oclSweepFromBottomRight(
 	const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
     const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, 
     const UMat&  blurredFlow, UMat& flow);
+CV_EXPORTS_W void oclSweepFromLeft(
+    const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
+    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, 
+    const UMat&  blurredFlow, UMat& flow);
+CV_EXPORTS_W void oclSweepFromTop(
+    const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
+    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, 
+    const UMat&  blurredFlow, UMat& flow);
+CV_EXPORTS_W void oclSweepFromRight(
+    const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
+    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, 
+    const UMat&  blurredFlow, UMat& flow);
+CV_EXPORTS_W void oclSweepFromBottom(
+    const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
+    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, 
+    const UMat&  blurredFlow, UMat& flow);
 
 }	// end namespace cv
 }	// end namespace imvt
