@@ -12,13 +12,13 @@ MatTrace& MatTrace::instance() {
 }
 
 void MatTrace::add(const string& kind, const string& key, const Mat& value) {
-	//std::cout << "add mat " << kind << key << " cols=" << value.cols << " rows=" << value.rows 
-	//	<< "channels=" << value.channels() << " type=" << value.type() << std::endl;
+	//std::cout << "add mat " << kind  << " " << key << " cols=" << value.cols << " rows=" << value.rows 
+	//	<< " channels=" << value.channels() << " type=" << value.type() << std::endl;
 	value.copyTo(mats[kind][key]);
 }
 
 void MatTrace::add(const string& kind, const string& key, const UMat& value) {
-	//std::cout << "add umat " << kind << key << " cols=" << value.cols << " rows=" << value.rows 
+	//std::cout << "add umat " << kind << " " << key << " cols=" << value.cols << " rows=" << value.rows
 	//	<< " channels=" << value.channels() << " type=" << value.type() << std::endl;
 	value.copyTo(mats[kind][key]);
 }

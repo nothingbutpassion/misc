@@ -37,64 +37,33 @@ or tort (including negligence or otherwise) arising in any way out of
 the use of this software, even if advised of the possibility of such damage.
 */
 
-#ifndef __OPENCV_IMVT_HPP__
-#define __OPENCV_IMVT_HPP__
+#ifndef __OPENCV_OCL_NOVELVIEW_HPP__
+#define __OPENCV_OCL_NOVELVIEW_HPP__
 
 #include "opencv2/core.hpp"
-#include "opencv2/imgproc.hpp"
-
 
 namespace cv {
 namespace imvt {
-						 
-enum class DirectionHint { 
-    UNKNOWN, 
-    RIGHT,
-    DOWN,
-    LEFT,
-    UP 
-};
 
+CV_EXPORTS_W void oclRemap(const UMat& src, UMat& dst, const UMat& map);
 
-CV_EXPORTS_W void computeOpticalFlow(
-    const Mat& I0BGRA,
-    const Mat& I1BGRA,
-    const Mat& prevFlow,
-    const Mat& prevI0BGRA,
-    const Mat& prevI1BGRA,
-    Mat& flow,
-    DirectionHint hint);
+CV_EXPORTS_W void oclGetFlowWarpMap(const UMat& flow, UMat& warpMap, double t);
+CV_EXPORTS_W void oclCombineNovelViews(
+    const UMat& imageL, float blendL,
+    const UMat& imageR, float blendR,
+    const UMat& flowLtoR, const UMat& flowRtoL, UMat& blendImage);
 
-
-CV_EXPORTS_W void computeOpticalFlow(
-    const UMat& I0BGRA,
-    const UMat& I1BGRA,
-    const UMat& prevFlow,
-    const UMat& prevI0BGRA,
-    const UMat& prevI1BGRA,
-    UMat& flow,
-    DirectionHint hint);
-
-
-CV_EXPORTS_W std::pair<Mat, Mat> combineLazyNovelViews(
-	const Mat& warpL,
-	const Mat& warpR,
-	const Mat& imageL,
-	const Mat& imageR,
-	const Mat& flowLtoR,
-	const Mat& flowRtoL);
-
-CV_EXPORTS_W std::pair<UMat, UMat> combineLazyNovelViews(
-	const UMat& warpL,
-	const UMat& warpR,
-	const UMat& imageL,
-	const UMat& imageR,
-	const UMat& flowLtoR,
-	const UMat& flowRtoL);
+CV_EXPORTS_W void oclCombineLazyViews(
+    const UMat& imageL, const UMat& imageR, 
+    const UMat& flowMagL, const UMat& flowMagR, UMat& blendImage);
+CV_EXPORTS_W void oclGetWarpOpticalFlow(const UMat& warpBuffer, UMat& warpFlow);
+CV_EXPORTS_W void oclGetWarpComposition(const UMat& warpBuffer, const UMat& warpFlow, UMat& warpComposition);
+CV_EXPORTS_W void oclGetNovelViewFlowMag(const UMat& warpBuffer, const UMat& warpFlow, UMat& novelView, UMat& flowMag);
 
 }	// end namespace cv
 }	// end namespace imvt
 
 
 
-#endif	// end __OPENCV_IMVT_HPP__
+#endif	// end __OPENCV_OCL_NOVELVIEW_HPP__
+

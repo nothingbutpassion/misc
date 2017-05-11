@@ -2,7 +2,7 @@
  * @brief the following macros are used for accessing img(x, y)
  */
 #define rmat8sc4(addr, x, y) ((__global const char4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-#define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc1(addr, x, y) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc2(addr, x, y) ((__global const float2*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc4(addr, x, y) ((__global const float4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
@@ -157,10 +157,10 @@ __kernel void resize_8UC4(
 				(float4)(u[2].x, u[2].y, u[2].z, u[2].w),  
 				(float4)(u[3].x, u[3].y, u[3].z, u[3].w),  
 				xR);
-		}
+		}		
 		
-		
-		float4 s = get_bicubic_8uc4(v[0], v[1], v[2], v[3], yR);
-		wmat8uc4(dst, dst_x, dst_y) = (uchar4)(convert_uchar_sat(s.x), convert_uchar_sat(s.y), convert_uchar_sat(s.z), convert_uchar_sat(s.w)); 
+		//float4 s = get_bicubic_8uc4(v[0], v[1], v[2], v[3], yR);
+		//wmat8uc4(dst, dst_x, dst_y) = (uchar4)(convert_uchar_sat(s.x), convert_uchar_sat(s.y), convert_uchar_sat(s.z), convert_uchar_sat(s.w));
+		wmat8uc4(dst, dst_x, dst_y) = convert_uchar4_sat(get_bicubic_8uc4(v[0], v[1], v[2], v[3], yR));
 	}
 }

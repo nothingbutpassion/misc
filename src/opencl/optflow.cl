@@ -2,7 +2,7 @@
  * @brief the following macros are used for accessing img(x, y)
  */
 #define rmat8sc4(addr, x, y) ((__global const char4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-#define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc1(addr, x, y) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc2(addr, x, y) ((__global const float2*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc4(addr, x, y) ((__global const float4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
@@ -13,11 +13,11 @@
 #define wmat32fc2(addr, x, y) ((__global float2*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc4(addr, x, y) ((__global float4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 
-#define rmat(addr, x, y) 		rmat32fc1(addr, x, y)
+#define rmat(addr, x, y) 	rmat32fc1(addr, x, y)
 #define rmat2(addr, x, y) 	rmat32fc2(addr, x, y)
 #define rmat4(addr, x, y) 	rmat32fc4(addr, x, y)
 
-#define wmat(addr, x, y) 		wmat32fc1(addr, x, y)
+#define wmat(addr, x, y) 	wmat32fc1(addr, x, y)
 #define wmat2(addr, x, y) 	wmat32fc2(addr, x, y)
 #define wmat4(addr, x, y) 	wmat32fc4(addr, x, y)
 
@@ -286,7 +286,7 @@ float2 error_gradient(
 		x, y, rmat2(flow, x, y)+dy);
 	
 	//return (float2)((fx - currErr)/kGradEpsilon, (fy - currErr)/kGradEpsilon);
-	return (float2)((fx - currErr)*1000, (fy - currErr)*1000);
+	return (float2)((fx - currErr)*1000.0f, (fy - currErr)*1000.0f);
 }
 
 /**
@@ -481,8 +481,10 @@ __kernel void sweep_from_right(
 	__global const float2* blurred, int blurred_step, int blurred_offset,
 	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols)
 {
-	int y = flow_rows - 1 - get_global_id(0);
-	if (y > 0) {
+	//int y = flow_rows - 1 - get_global_id(0);
+	//if (y >= 0) {
+	int y = get_global_id(0);
+	if (y < flow_rows) {
 		for (int x=flow_cols-1; x >=0; --x) {
 			if (rmat(alpha0, x, y) > kUpdateAlphaThreshold && rmat(alpha1, x, y) > kUpdateAlphaThreshold) {
 				float currErr = error_function(
@@ -579,8 +581,10 @@ __kernel void sweep_from_bottom(
 	__global const float2* blurred, int blurred_step, int blurred_offset,
 	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols)
 {
-	int x = flow_cols - 1 - get_global_id(0);
-	if (x > 0) {
+	//int x = flow_cols - 1 - get_global_id(0);
+	//if (x >= 0) {
+	int x = get_global_id(0);
+	if (x < flow_cols) {		
 		for (int y=flow_rows-1; y >=0; --y) {
 			if (rmat(alpha0, x, y) > kUpdateAlphaThreshold && rmat(alpha1, x, y) > kUpdateAlphaThreshold) {
 				float currErr = error_function(
