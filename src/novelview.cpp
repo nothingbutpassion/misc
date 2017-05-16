@@ -14,20 +14,12 @@
 #include "opencv2/imvt.hpp"
 #include "surround360_novelview.hpp"
 
-// for debuging
-#include <iostream>
-#include "opencv2/imvt/trace.hpp"
-#define FORMAT(fmt, ...)        cv::imvt::format(fmt, __VA_ARGS__)
-#define TRACE_MAT(name, mat)    cv::imvt::MatTrace::instance().add("opencl", name, mat)
-
-
 
 namespace cv {
 namespace imvt {
 
 using namespace std;
 using namespace cv;
-
 
 CV_EXPORTS_W void oclRemap(const UMat& src, UMat& dst, const UMat& map) {
     CV_Assert(src.type() == CV_8UC4 || src.type() == CV_32FC2);
@@ -142,7 +134,7 @@ struct OCLLazyNovelViewBuffer {
     }
     */
 	UMat warpL;
-	UMat wrapR;
+	UMat warpR;
 };
 
 static UMat generateNovelViewSimpleCvRemap(const UMat& srcImage, const UMat& flow, double t) {
@@ -262,17 +254,6 @@ struct OCLNovelViewGeneratorLazyFlow {
         */
         UMat novelViewFlowMag(novelView.size(), CV_32F);
         oclGetNovelViewFlowMag(novelViewWarpBuffer, remappedFlow, novelView, novelViewFlowMag, invertT ? 1 : 0);
-
-        /*
-        static int g_trace_index = 0;
-        g_trace_index++;
-        TRACE_MAT(FORMAT("warpOpticalFlow_%d", g_trace_index), warpOpticalFlow);
-        TRACE_MAT(FORMAT("remappedFlow_%d", g_trace_index), remappedFlow);
-        TRACE_MAT(FORMAT("warpComposition_%d", g_trace_index), warpComposition);
-        TRACE_MAT(FORMAT("novelView_%d", g_trace_index), novelView);
-        TRACE_MAT(FORMAT("novelViewFlowMag_%d", g_trace_index), novelViewFlowMag);
-        */
-        
         return make_pair(novelView, novelViewFlowMag);
     }
 
@@ -295,12 +276,12 @@ struct OCLNovelViewGeneratorLazyFlow {
 
         // two images for the right eye (to be combined)
         pair<UMat, UMat> rightEyeFromLeft = renderLazyNovelView(
-            lazyBuffer.wrapR,
+            lazyBuffer.warpR,
             imageL,
             flowRtoL,
             false);
 		pair<UMat, UMat> rightEyeFromRight = renderLazyNovelView(
-			lazyBuffer.wrapR,
+			lazyBuffer.warpR,
             imageR,
             flowLtoR,
             true);
@@ -321,6 +302,36 @@ struct OCLNovelViewGeneratorLazyFlow {
 			rightEyeCombined);
         return make_pair(leftEyeCombined, rightEyeCombined);
     }
+    
+    /* @added 
+     */
+     // NOTES: This function is the special version for the above one where warp == lazyBuffer.warpL == lazyBuffer.warpR.
+     //        So, the return value == leftEyeCombined == rightEyeCombined.
+    UMat combineLazyNovelViews(const UMat& warp) {
+        pair<UMat, UMat> leftEyeFromLeft = renderLazyNovelView(
+            warp,
+            imageL,
+            flowRtoL,
+            false);
+        
+        pair<UMat, UMat> leftEyeFromRight = renderLazyNovelView(
+            warp,
+            imageR,
+            flowLtoR,
+            true);
+        
+		UMat leftEyeCombined(leftEyeFromLeft.first.size(), CV_8UC4);
+		oclCombineLazyViews(
+            leftEyeFromLeft.first,
+            leftEyeFromRight.first,
+            leftEyeFromLeft.second,
+            leftEyeFromRight.second,
+			leftEyeCombined);
+        
+        return leftEyeCombined; 
+    }
+
+    
 };
 
 // OpenCL version
@@ -334,7 +345,7 @@ CV_EXPORTS_W pair<UMat, UMat> combineLazyNovelViews(
 
     OCLLazyNovelViewBuffer lazyBuffer;
     lazyBuffer.warpL = warpL;
-	lazyBuffer.wrapR = warpR;
+	lazyBuffer.warpR = warpR;
     
     OCLNovelViewGeneratorLazyFlow generatorLazyFlow;
     generatorLazyFlow.imageL = imageL;
@@ -343,6 +354,20 @@ CV_EXPORTS_W pair<UMat, UMat> combineLazyNovelViews(
     generatorLazyFlow.flowRtoL = flowRtoL;
     
     return generatorLazyFlow.combineLazyNovelViews(lazyBuffer);
+}
+
+CV_EXPORTS_W UMat combineLazyNovelViews(
+    const UMat& warp,
+    const UMat& imageL,
+    const UMat& imageR,
+    const UMat& flowLtoR,
+    const UMat& flowRtoL) {
+    OCLNovelViewGeneratorLazyFlow generatorLazyFlow;
+    generatorLazyFlow.imageL = imageL;
+    generatorLazyFlow.imageR = imageR;
+    generatorLazyFlow.flowLtoR = flowLtoR;
+    generatorLazyFlow.flowRtoL = flowRtoL;
+    return generatorLazyFlow.combineLazyNovelViews(warp);
 }
 
 

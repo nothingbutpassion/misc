@@ -1,25 +1,25 @@
 /**
  * @brief the following macros are used for accessing img(x, y)
  */
-#define rmat8sc4(addr, x, y) ((__global const char4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+//#define rmat8sc4(addr, x, y) ((__global const char4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc1(addr, x, y) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc2(addr, x, y) ((__global const float2*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-#define rmat32fc4(addr, x, y) ((__global const float4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+//#define rmat32fc4(addr, x, y) ((__global const float4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 
-#define wmat8sc4(addr, x, y) ((__global char4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-#define wmat8uc4(addr, x, y) ((__global uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+//#define wmat8sc4(addr, x, y) ((__global char4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+//#define wmat8uc4(addr, x, y) ((__global uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc1(addr, x, y) ((__global float*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc2(addr, x, y) ((__global float2*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-#define wmat32fc4(addr, x, y) ((__global float4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+//#define wmat32fc4(addr, x, y) ((__global float4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 
 #define rmat(addr, x, y) 	rmat32fc1(addr, x, y)
 #define rmat2(addr, x, y) 	rmat32fc2(addr, x, y)
-#define rmat4(addr, x, y) 	rmat32fc4(addr, x, y)
+//#define rmat4(addr, x, y) 	rmat32fc4(addr, x, y)
 
 #define wmat(addr, x, y) 	wmat32fc1(addr, x, y)
 #define wmat2(addr, x, y) 	wmat32fc2(addr, x, y)
-#define wmat4(addr, x, y) 	wmat32fc4(addr, x, y)
+//#define wmat4(addr, x, y) 	wmat32fc4(addr, x, y)
 
 /**
  * @brief motion detection
@@ -58,30 +58,32 @@ __kernel void adjust_flow_toward_previous(
 /**
  * @brief the follwoing constants must be same as the ones defined in host program
  */
-__constant int   kPyrMinImageSize 			= 24;
+__constant int   kPyrMinImageSize 				= 24;
 // __constant int   kPyrMaxLevels 				= 1000;
-__constant float kGradEpsilon 				= 0.001f; // for finite differences
-__constant float kUpdateAlphaThreshold 		= 0.9f;   // pixels with alpha below this aren't updated by proposals
+__constant float kGradEpsilon 					= 0.001f; // for finite differences
+__constant float kUpdateAlphaThreshold 			= 0.9f;   // pixels with alpha below this aren't updated by proposals
 // __constant int   kMedianBlurSize 			= 5;      // medianBlur max size is 5 pixels for CV_32FC2
 // __constant int   kPreBlurKernelWidth 		= 5;
 // __constant float kPreBlurSigma 				= 0.25f;  // amount to blur images before pyramids
 // __constant int   kFinalFlowBlurKernelWidth 	= 3;
 // __constant float kFinalFlowBlurSigma 		= 1.0f;   // blur that is applied to flow at the end after upscaling
 // __constant int   kGradientBlurKernelWidth 	= 3;
-// __constant float kGradientBlurSigma 		= 0.5f;   // amount to blur image gradients
+// __constant float kGradientBlurSigma 			= 0.5f;   // amount to blur image gradients
 // __constant int   kBlurredFlowKernelWidth 	= 15;     // for regularization/smoothing/diffusion
 // __constant float kBlurredFlowSigma 			= 8.0f;
-
+//
 // the following values is specified in original implementation
-// __constant float kPyrScaleFactor = 0.9f;
-__constant float kSmoothnessCoef = 0.001f;
-__constant float kVerticalRegularizationCoef = 0.01f;
-__constant float kHorizontalRegularizationCoef = 0.01f;
-__constant float kGradientStepSize = 0.5f;
-// __constant float kDownscaleFactor = 0.5f;
+//
+// __constant float kPyrScaleFactor 			= 0.9f;
+__constant float kSmoothnessCoef 				= 0.001f;
+__constant float kVerticalRegularizationCoef 	= 0.01f;
+__constant float kHorizontalRegularizationCoef 	= 0.01f;
+__constant float kGradientStepSize 				= 0.5f;
+// __constant float kDownscaleFactor 			= 0.5f;
 __constant float kDirectionalRegularizationCoef = 0.0f;
-__constant int   kUseDirectionalRegularization = 0;
-__constant int   kMaxPercentage = 0;					// NOTES?this value can't be zero, and should be same as the one in host program
+__constant int   kUseDirectionalRegularization 	= 0;
+__constant int   kMaxPercentage 				= 0;	// NOTES: this value can't be zero, and should be same as the one in host program
+
 
 float compute_patch_error(
 	__global const float* I0, int I0_step, int I0_offset, int I0_rows, int I0_cols, int i0x, int i0y, 
@@ -293,8 +295,6 @@ float2 error_gradient(
  * @brief sweep from top left
  */
 __kernel void sweep_from_top_left(
-	__global const float* I0, int I0_step, int I0_offset,
-	__global const float* I1, int I1_step, int I1_offset,
 	__global const float* alpha0, int alpha0_step, int alpha0_offset,
 	__global const float* alpha1, int alpha1_step, int alpha1_offset,
 	__global const float* I0x, int I0x_step, int I0x_offset,
@@ -357,8 +357,6 @@ __kernel void sweep_from_top_left(
  * @brief sweep from bottom right
  */
 __kernel void sweep_from_bottom_right(
-	__global const float* I0, int I0_step, int I0_offset,
-	__global const float* I1, int I1_step, int I1_offset,
 	__global const float* alpha0, int alpha0_step, int alpha0_offset,
 	__global const float* alpha1, int alpha1_step, int alpha1_offset,
 	__global const float* I0x, int I0x_step, int I0x_offset,
@@ -418,10 +416,7 @@ __kernel void sweep_from_bottom_right(
 }
 
 
-
 __kernel void sweep_from_left(
-	__global const float* I0, int I0_step, int I0_offset,
-	__global const float* I1, int I1_step, int I1_offset,
 	__global const float* alpha0, int alpha0_step, int alpha0_offset,
 	__global const float* alpha1, int alpha1_step, int alpha1_offset,
 	__global const float* I0x, int I0x_step, int I0x_offset,
@@ -470,8 +465,6 @@ __kernel void sweep_from_left(
 
 
 __kernel void sweep_from_right(
-	__global const float* I0, int I0_step, int I0_offset,
-	__global const float* I1, int I1_step, int I1_offset,
 	__global const float* alpha0, int alpha0_step, int alpha0_offset,
 	__global const float* alpha1, int alpha1_step, int alpha1_offset,
 	__global const float* I0x, int I0x_step, int I0x_offset,
@@ -481,8 +474,6 @@ __kernel void sweep_from_right(
 	__global const float2* blurred, int blurred_step, int blurred_offset,
 	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols)
 {
-	//int y = flow_rows - 1 - get_global_id(0);
-	//if (y >= 0) {
 	int y = get_global_id(0);
 	if (y < flow_rows) {
 		for (int x=flow_cols-1; x >=0; --x) {
@@ -521,8 +512,6 @@ __kernel void sweep_from_right(
 }
 
 __kernel void sweep_from_top(
-	__global const float* I0, int I0_step, int I0_offset,
-	__global const float* I1, int I1_step, int I1_offset,
 	__global const float* alpha0, int alpha0_step, int alpha0_offset,
 	__global const float* alpha1, int alpha1_step, int alpha1_offset,
 	__global const float* I0x, int I0x_step, int I0x_offset,
@@ -570,8 +559,6 @@ __kernel void sweep_from_top(
 }
 
 __kernel void sweep_from_bottom(
-	__global const float* I0, int I0_step, int I0_offset,
-	__global const float* I1, int I1_step, int I1_offset,
 	__global const float* alpha0, int alpha0_step, int alpha0_offset,
 	__global const float* alpha1, int alpha1_step, int alpha1_offset,
 	__global const float* I0x, int I0x_step, int I0x_offset,
@@ -581,8 +568,6 @@ __kernel void sweep_from_bottom(
 	__global const float2* blurred, int blurred_step, int blurred_offset,
 	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols)
 {
-	//int x = flow_cols - 1 - get_global_id(0);
-	//if (x >= 0) {
 	int x = get_global_id(0);
 	if (x < flow_cols) {		
 		for (int y=flow_rows-1; y >=0; --y) {

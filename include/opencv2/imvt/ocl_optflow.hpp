@@ -52,29 +52,23 @@ CV_EXPORTS_W void oclAdjustFlowTowardPrevious(const UMat& prevFlow, const UMat& 
 CV_EXPORTS_W void oclEstimateFlow(const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, UMat& flow, const Rect& box);
 CV_EXPORTS_W void oclAlphaFlowDiffusion(const UMat& alpha0, const UMat& alpha1, const UMat& blurredFlow, UMat& flow); 
 CV_EXPORTS_W void oclSweepFromTopLeft(
-	const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
-    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, 
-    const UMat&  blurredFlow, UMat& flow);
+	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y, 
+	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow);
 CV_EXPORTS_W void oclSweepFromBottomRight(
-	const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
-    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, 
-    const UMat&  blurredFlow, UMat& flow);
+	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y,
+	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow);
 CV_EXPORTS_W void oclSweepFromLeft(
-    const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
-    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, 
-    const UMat&  blurredFlow, UMat& flow);
+	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y,
+	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow);
 CV_EXPORTS_W void oclSweepFromTop(
-    const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
-    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, 
-    const UMat&  blurredFlow, UMat& flow);
+	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y,
+	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow);
 CV_EXPORTS_W void oclSweepFromRight(
-    const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
-    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, 
-    const UMat&  blurredFlow, UMat& flow);
+	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y,
+	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow);
 CV_EXPORTS_W void oclSweepFromBottom(
-    const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, 
-    const UMat& I0x, const UMat& I0y, const UMat& I1x, const UMat& I1y, 
-    const UMat&  blurredFlow, UMat& flow);
+	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y,
+	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow);
 
 }	// end namespace cv
 }	// end namespace imvt

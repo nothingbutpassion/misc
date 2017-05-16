@@ -46,13 +46,11 @@ namespace cv {
 namespace imvt {
 
 CV_EXPORTS_W void oclRemap(const UMat& src, UMat& dst, const UMat& map);
-
 CV_EXPORTS_W void oclGetFlowWarpMap(const UMat& flow, UMat& warpMap, double t);
 CV_EXPORTS_W void oclCombineNovelViews(
-    const UMat& imageL, float blendL,
-    const UMat& imageR, float blendR,
+    const UMat& imageL, float blendL, 
+	const UMat& imageR, float blendR,
     const UMat& flowLtoR, const UMat& flowRtoL, UMat& blendImage);
-
 CV_EXPORTS_W void oclCombineLazyViews(
     const UMat& imageL, const UMat& imageR, 
     const UMat& flowMagL, const UMat& flowMagR, UMat& blendImage);

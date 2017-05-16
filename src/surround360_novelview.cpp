@@ -14,12 +14,6 @@
 #include <opencv2/imgproc/types_c.h>
 #include "surround360_novelview.hpp"
 
-// for debuging
-#include <iostream>
-#include "opencv2/imvt/trace.hpp"
-#define FORMAT(fmt, ...)        cv::imvt::format(fmt, __VA_ARGS__)
-#define TRACE_MAT(name, mat)    cv::imvt::MatTrace::instance().add("opencv", name, mat)
-
 
 namespace cv {
 namespace imvt {
@@ -227,17 +221,6 @@ pair<Mat, Mat> NovelViewGeneratorLazyFlow::renderLazyNovelView(
                 sqrtf(flowDir.x * flowDir.x + flowDir.y * flowDir.y);
         }
     }
-
-    /*
-    static int g_trace_index = 0;
-    g_trace_index++;
-    TRACE_MAT(FORMAT("warpOpticalFlow_%d", g_trace_index), warpOpticalFlow);
-    TRACE_MAT(FORMAT("remappedFlow_%d", g_trace_index), remappedFlow);
-    TRACE_MAT(FORMAT("warpComposition_%d", g_trace_index), warpComposition);
-    TRACE_MAT(FORMAT("novelView_%d", g_trace_index), novelView);
-    TRACE_MAT(FORMAT("novelViewFlowMag_%d", g_trace_index), novelViewFlowMag);
-    */
-
     return make_pair(novelView, novelViewFlowMag);
 }
 
