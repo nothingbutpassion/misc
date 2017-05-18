@@ -60,6 +60,14 @@ CV_EXPORTS_W UMat combineLazyNovelViews(
 	const UMat& flowLtoR,
 	const UMat& flowRtoL);
 
+
+CV_EXPORTS_W void renderPanoramaChunks(
+    const std::vector<UMat>& imageLs,
+    const std::vector<UMat>& imageRs,
+    std::vector<UMat>& chunks);
+
+CV_EXPORTS_W void releaseRenderBuffer();
+
 }	// end namespace cv
 }	// end namespace imvt
 
