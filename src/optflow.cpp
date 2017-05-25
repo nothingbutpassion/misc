@@ -1,19 +1,21 @@
 #include <iostream>
 #include <thread>
+#include <mutex>
 #include "precomp.hpp"
-#include "opencl_kernels_imvt.hpp"
-#include "opencv2/imvt.hpp"
-#include "surround360_pixflow.hpp"
-
+#include "opencl_kernels_oclrenderpano.hpp"
+#include "opencv2/oclrenderpano/ocl_optflow.hpp"
 
 namespace cv {
+namespace ocl {
 namespace imvt {
+
+using namespace std;
 
 // scale operation: dst == src * ration 
 CV_EXPORTS_W void oclScale(const UMat& src, UMat& dst, float factor) {
 	CV_Assert(src.type() == CV_32FC1 || src.type() == CV_32FC2 || src.type() == CV_32FC4 || src.type() == dst.type());
     string kernelName = string("scale") + (src.type() == CV_32FC1 ? "_32FC1" : src.type() == CV_32FC2 ? "_32FC2" : "_32FC4");
-    ocl::Kernel k(kernelName.c_str(), ocl::imvt::scale_oclsrc);
+    ocl::Kernel k(kernelName.c_str(), ocl::oclrenderpano::scale_oclsrc);
     k.args(ocl::KernelArg::ReadWrite(src), 
         ocl::KernelArg::ReadWriteNoSize(dst), 
         ocl::KernelArg::Constant(&factor, sizeof(factor)));
@@ -26,7 +28,7 @@ CV_EXPORTS_W void oclScale(const UMat& src, UMat& dst, float factor) {
 CV_EXPORTS_W void oclScale(UMat& src, float factor) {
 	CV_Assert(src.type() == CV_32FC1 || src.type() == CV_32FC2 || src.type() == CV_32FC4);
     string kernelName = string("scale_self") + (src.type() == CV_32FC1 ? "_32FC1" : src.type() == CV_32FC2 ? "_32FC2" : "_32FC4");
-    ocl::Kernel k(kernelName.c_str(), ocl::imvt::scale_oclsrc);
+    ocl::Kernel k(kernelName.c_str(), ocl::oclrenderpano::scale_oclsrc);
     k.args(ocl::KernelArg::ReadWrite(src), 
         ocl::KernelArg::Constant(&factor, sizeof(factor)));
     size_t globalsize[] = {src.cols, src.rows};
@@ -43,7 +45,7 @@ CV_EXPORTS_W void oclResize(const UMat& src, UMat& dst, Size dsize) {
     float factor_x = float(double(s.cols) /double(dst.cols));
     float factor_y = float(double(s.rows) /double(dst.rows));
     string kernelName = string("resize") + (s.type() == CV_32FC1 ? "_32FC1" : s.type() == CV_32FC2 ? "_32FC2" : "_8UC4");
-    ocl::Kernel k(kernelName.c_str(), ocl::imvt::resize_oclsrc);
+    ocl::Kernel k(kernelName.c_str(), ocl::oclrenderpano::resize_oclsrc);
     k.args(ocl::KernelArg::ReadOnly(s),
         ocl::KernelArg::ReadWrite(dst), 
         ocl::KernelArg::Constant(&factor_x, sizeof(factor_x)),
@@ -53,9 +55,20 @@ CV_EXPORTS_W void oclResize(const UMat& src, UMat& dst, Size dsize) {
     k.run(2, globalsize, localsize, false);
 }
 
+
+
 // do motion detection vs. previous frame's images
 CV_EXPORTS_W void oclMotionDetection(const UMat& cur, const UMat& pre, UMat& motion) {
-    ocl::Kernel k("motion_detection", ocl::imvt::optflow_oclsrc);
+    ocl::Kernel k("motion_detection", ocl::oclrenderpano::optflow_oclsrc);
+    k.args(ocl::KernelArg::ReadOnly(cur),
+        ocl::KernelArg::ReadOnlyNoSize(pre),
+        ocl::KernelArg::WriteOnlyNoSize(motion));
+    size_t globalsize[] = {motion.cols, motion.rows};
+    size_t localsize[] = {16, 16};
+    k.run(2, globalsize, localsize, false);
+}
+CV_EXPORTS_W void oclMotionDetectionV2(const UMat& cur, const UMat& pre, UMat& motion) {
+    ocl::Kernel k("motion_detection_v2", ocl::oclrenderpano::optflow_oclsrc);
     k.args(ocl::KernelArg::ReadOnly(cur),
         ocl::KernelArg::ReadOnlyNoSize(pre),
         ocl::KernelArg::WriteOnlyNoSize(motion));
@@ -66,7 +79,7 @@ CV_EXPORTS_W void oclMotionDetection(const UMat& cur, const UMat& pre, UMat& mot
 
 // adjust flow toward previous
 CV_EXPORTS_W void oclAdjustFlowTowardPrevious(const UMat& prevFlow, const UMat& motion, UMat& flow) {
-    ocl::Kernel k("adjust_flow_toward_previous", ocl::imvt::optflow_oclsrc);
+    ocl::Kernel k("adjust_flow_toward_previous", ocl::oclrenderpano::optflow_oclsrc);
     k.args(ocl::KernelArg::ReadWrite(flow),
         ocl::KernelArg::ReadOnlyNoSize(prevFlow),
         ocl::KernelArg::ReadOnlyNoSize(motion));
@@ -74,10 +87,20 @@ CV_EXPORTS_W void oclAdjustFlowTowardPrevious(const UMat& prevFlow, const UMat& 
     size_t localsize[] = {16, 16};
     k.run(2, globalsize, localsize, false);
 }
+CV_EXPORTS_W void oclAdjustFlowTowardPreviousV2(const UMat& prevFlow, const UMat& motion, UMat& flow, float motionThreshhold) {
+    ocl::Kernel k("adjust_flow_toward_previous_v2", ocl::oclrenderpano::optflow_oclsrc);
+    k.args(ocl::KernelArg::ReadWrite(flow),
+        ocl::KernelArg::ReadOnlyNoSize(prevFlow),
+        ocl::KernelArg::ReadOnlyNoSize(motion),
+        ocl::KernelArg::Constant(&motionThreshhold, sizeof(motionThreshhold)));
+    size_t globalsize[] = {flow.cols, flow.rows};
+    size_t localsize[] = {16, 16};
+    k.run(2, globalsize, localsize, false);
+}
 
 // estimate the flow of each pixel in I0 by searching a rectangle
 CV_EXPORTS_W void oclEstimateFlow(const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, UMat& flow, const Rect& box) {
-    ocl::Kernel k("estimate_flow", ocl::imvt::optflow_oclsrc);
+    ocl::Kernel k("estimate_flow", ocl::oclrenderpano::optflow_oclsrc);
     k.args(ocl::KernelArg::ReadOnly(I0), 
         ocl::KernelArg::ReadOnly(I1),
         ocl::KernelArg::ReadOnlyNoSize(alpha0), 
@@ -94,7 +117,7 @@ CV_EXPORTS_W void oclEstimateFlow(const UMat& I0, const UMat& I1, const UMat& al
 
 // low alpha flow diffusion
 CV_EXPORTS_W void oclAlphaFlowDiffusion(const UMat& alpha0, const UMat& alpha1, const UMat& blurredFlow, UMat& flow) {
-    ocl::Kernel k("alpha_flow_diffusion", ocl::imvt::optflow_oclsrc);
+    ocl::Kernel k("alpha_flow_diffusion", ocl::oclrenderpano::optflow_oclsrc);
     k.args(ocl::KernelArg::ReadOnlyNoSize(alpha0), 
         ocl::KernelArg::ReadOnlyNoSize(alpha1),
         ocl::KernelArg::ReadOnlyNoSize(blurredFlow),
@@ -104,78 +127,11 @@ CV_EXPORTS_W void oclAlphaFlowDiffusion(const UMat& alpha0, const UMat& alpha1, 
     k.run(2, globalsize, localsize, false);
 }
 
-// sweep from top/left
-CV_EXPORTS_W void oclSweepFromTopLeft(
-    const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y, 
-	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow) {
-
-    ocl::Kernel k("sweep_from_top_left", ocl::imvt::optflow_oclsrc);
-	k.args(ocl::KernelArg::ReadOnlyNoSize(alpha0),
-		ocl::KernelArg::ReadOnlyNoSize(alpha1),
-		ocl::KernelArg::ReadOnlyNoSize(I0x),
-		ocl::KernelArg::ReadOnlyNoSize(I0y),
-		ocl::KernelArg::ReadOnlyNoSize(I1x),
-		ocl::KernelArg::ReadOnlyNoSize(I1y),
-		ocl::KernelArg::ReadOnlyNoSize(blurredFlow),
-		ocl::KernelArg::ReadWrite(flow));
-    int minrc = flow.rows < flow.cols ? flow.rows : flow.cols;
-    for (int i=0; i < flow.rows + flow.cols - 1; ++i) {
-        int start_y = i < flow.rows ? i : flow.rows - 1;
-        int start_x = i - start_y;
-		k.set(26, &start_x, sizeof(start_x));
-		k.set(27, &start_y, sizeof(start_y));
-        size_t globalsize[] ={(i < minrc ? i+1 : flow.rows+ flow.cols-1-i < minrc ? flow.rows+ flow.cols-1-i : minrc)};
-        size_t localsize[] = {64};
-
-		bool succeed = false;
-		if (i < flow.rows + flow.cols - 2) {
-			succeed = k.runAsync(1, globalsize, localsize);
-		} else {
-			succeed = k.run(1, globalsize, localsize, false);
-		}
-		CV_Assert(succeed);
-    }
-    
-}
-
-// sweep from bottom/right
-CV_EXPORTS_W void oclSweepFromBottomRight(
-	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y, 
-	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow) {
-
-    ocl::Kernel k("sweep_from_bottom_right", ocl::imvt::optflow_oclsrc);
-	k.args(ocl::KernelArg::ReadOnlyNoSize(alpha0),
-		ocl::KernelArg::ReadOnlyNoSize(alpha1),
-		ocl::KernelArg::ReadOnlyNoSize(I0x),
-		ocl::KernelArg::ReadOnlyNoSize(I0y),
-		ocl::KernelArg::ReadOnlyNoSize(I1x),
-		ocl::KernelArg::ReadOnlyNoSize(I1y),
-		ocl::KernelArg::ReadOnlyNoSize(blurredFlow),
-		ocl::KernelArg::ReadWrite(flow));
-    int minrc = flow.rows < flow.cols ? flow.rows : flow.cols;
-    for (int i= flow.rows + flow.cols - 2; i >= 0 ; --i) {
-        int start_y = i < flow.rows ? i : flow.rows - 1;
-        int start_x = i - start_y;
-		k.set(26, &start_x, sizeof(start_x));
-		k.set(27, &start_y, sizeof(start_y));
-        size_t globalsize[] ={(i < minrc ? i+1 : flow.rows+ flow.cols-1-i < minrc ? flow.rows+ flow.cols-1-i : minrc)};
-        size_t localsize[] = {64};
-		bool succeed = false;
-		if (i > 0) {
-			succeed = k.runAsync(1, globalsize, localsize);
-		} else {
-			succeed = k.run(1, globalsize, localsize, false);
-		}
-		CV_Assert(succeed);
-    }  
-}
-
 
 CV_EXPORTS_W void oclSweepFromLeft(
     const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y, 
 	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow) {
-
-    ocl::Kernel k("sweep_from_left", ocl::imvt::optflow_oclsrc);
+    ocl::Kernel k("sweep_from_left", ocl::oclrenderpano::optflow_oclsrc);
 	k.args(ocl::KernelArg::ReadOnlyNoSize(alpha0),
 		ocl::KernelArg::ReadOnlyNoSize(alpha1),
 		ocl::KernelArg::ReadOnlyNoSize(I0x),
@@ -193,8 +149,7 @@ CV_EXPORTS_W void oclSweepFromLeft(
 CV_EXPORTS_W void oclSweepFromRight(
     const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y,
 	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow) {
-
-    ocl::Kernel k("sweep_from_right", ocl::imvt::optflow_oclsrc);
+    ocl::Kernel k("sweep_from_right", ocl::oclrenderpano::optflow_oclsrc);
 	k.args(ocl::KernelArg::ReadOnlyNoSize(alpha0),
 		ocl::KernelArg::ReadOnlyNoSize(alpha1),
 		ocl::KernelArg::ReadOnlyNoSize(I0x),
@@ -213,8 +168,7 @@ CV_EXPORTS_W void oclSweepFromRight(
 CV_EXPORTS_W void oclSweepFromTop(
 	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y,
 	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow) {
-
-    ocl::Kernel k("sweep_from_top", ocl::imvt::optflow_oclsrc);
+    ocl::Kernel k("sweep_from_top", ocl::oclrenderpano::optflow_oclsrc);
 	k.args(ocl::KernelArg::ReadOnlyNoSize(alpha0),
 		ocl::KernelArg::ReadOnlyNoSize(alpha1),
 		ocl::KernelArg::ReadOnlyNoSize(I0x),
@@ -232,8 +186,8 @@ CV_EXPORTS_W void oclSweepFromTop(
 CV_EXPORTS_W void oclSweepFromBottom(
 	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y, 
 	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow) {
-
-	ocl::Kernel k("sweep_from_bottom", ocl::imvt::optflow_oclsrc);
+	
+	ocl::Kernel k("sweep_from_bottom", ocl::oclrenderpano::optflow_oclsrc);
 	k.args(ocl::KernelArg::ReadOnlyNoSize(alpha0),
 		ocl::KernelArg::ReadOnlyNoSize(alpha1),
 		ocl::KernelArg::ReadOnlyNoSize(I0x),
@@ -248,9 +202,23 @@ CV_EXPORTS_W void oclSweepFromBottom(
 	CV_Assert(succeed);
 }
 
+// sweep from top/left
+CV_EXPORTS_W void oclSweepFromTopLeft(
+	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y,
+	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow) {
+	oclSweepFromLeft(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+	oclSweepFromTop(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+}
 
+// sweep from bottom/right
+CV_EXPORTS_W void oclSweepFromBottomRight(
+	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y,
+	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow) {
+	oclSweepFromRight(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+	oclSweepFromBottom(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+}
 
-struct OCLOptFlow {
+struct OpticalFlow {
 	static constexpr int   kPyrMinImageSize = 24;
 	static constexpr int   kPyrMaxLevels = 1000;
 	static constexpr float kGradEpsilon = 0.001f; // for finite differences
@@ -296,7 +264,8 @@ struct OCLOptFlow {
 		const UMat& prevI0BGRA,
 		const UMat& prevI1BGRA,
 		UMat& flow,
-		DirectionHint hint) {
+		DirectionHint hint,
+		float motionThreshhold = 1.0f) {
 
 		assert(prevFlow.dims == 0 || prevFlow.size() == rgba0byte.size());
 
@@ -344,7 +313,7 @@ struct OCLOptFlow {
 				}
 			}
 			*/
-			oclMotionDetection(rgba1byteDownscaled, prevI1BGRADownscaled, motion);
+			oclMotionDetectionV2(rgba1byteDownscaled, prevI1BGRADownscaled, motion);
 		}
 
 		// convert to various color spaces
@@ -425,7 +394,7 @@ struct OCLOptFlow {
 				/* @deleted
 				adjustFlowTowardPrevious(prevFlowPyramid[level], motionPyramid[level], flow);
 				*/
-				oclAdjustFlowTowardPrevious(prevFlowPyramid[level], motionPyramid[level], flow);
+				oclAdjustFlowTowardPreviousV2(prevFlowPyramid[level], motionPyramid[level], flow, motionThreshhold);
 			}
 			
 			if (level > 0) { // scale the flow up to the next size
@@ -717,29 +686,18 @@ struct OCLOptFlow {
 
 
 // OpenCL version
-CV_EXPORTS_W void computeOpticalFlow(
+CV_EXPORTS_W void oclComputeOpticalFlow(
     const UMat& I0BGRA,
     const UMat& I1BGRA,
     const UMat& prevFlow,
     const UMat& prevI0BGRA,
     const UMat& prevI1BGRA,
     UMat& flow,
-    DirectionHint hint) {
-	OCLOptFlow().computeOpticalFlow(I0BGRA, I1BGRA, prevFlow, prevI0BGRA, prevI1BGRA, flow, hint);
+    DirectionHint hint,
+	float motionThreshhold) {
+	OpticalFlow().computeOpticalFlow(I0BGRA, I1BGRA, prevFlow, prevI0BGRA, prevI1BGRA, flow, hint, motionThreshhold);
 }
 
-// Facebook version
-CV_EXPORTS_W void computeOpticalFlow(
-    const Mat& I0BGRA,
-    const Mat& I1BGRA,
-    const Mat& prevFlow,
-    const Mat& prevI0BGRA,
-    const Mat& prevI1BGRA,
-    Mat& flow,
-    DirectionHint hint) {
-	PixFlow().computeOpticalFlow(I0BGRA, I1BGRA, prevFlow, prevI0BGRA, prevI1BGRA, flow, hint);
-}
-
-
-}	// end namespace imvt
+}   // end namespace imvt
+}	// end namespace ocl
 } 	// end namespace cv

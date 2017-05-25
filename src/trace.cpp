@@ -1,10 +1,12 @@
 #include <cstdarg>
 #include <iostream>
-#include "opencv2/imvt/trace.hpp"
+#include "opencv2/oclrenderpano/trace.hpp"
 
 namespace cv {
+namespace ocl {
 namespace imvt {
 
+using namespace std;
 
 MatTrace& MatTrace::instance() {
 	static MatTrace mt;
@@ -65,5 +67,6 @@ CV_EXPORTS_W string format(const char* fmt, ...) {
 }
 
 
-}	// end namespace imvt
-} 	// end namespace cv
+}	// namespace imvt
+}	// namespace ocl
+} 	// namespace cv

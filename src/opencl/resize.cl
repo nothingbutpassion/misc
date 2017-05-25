@@ -1,25 +1,17 @@
 /**
  * @brief the following macros are used for accessing img(x, y)
  */
-//#define rmat8sc4(addr, x, y) ((__global const char4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc1(addr, x, y) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc2(addr, x, y) ((__global const float2*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-//#define rmat32fc4(addr, x, y) ((__global const float4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-
-//#define wmat8sc4(addr, x, y) ((__global char4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat8uc4(addr, x, y) ((__global uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc1(addr, x, y) ((__global float*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc2(addr, x, y) ((__global float2*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-//#define wmat32fc4(addr, x, y) ((__global float4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 
-#define rmat(addr, x, y) 		rmat32fc1(addr, x, y)
+#define rmat(addr, x, y) 	rmat32fc1(addr, x, y)
 #define rmat2(addr, x, y) 	rmat32fc2(addr, x, y)
-//#define rmat4(addr, x, y) 	rmat32fc4(addr, x, y)
-
-#define wmat(addr, x, y) 		wmat32fc1(addr, x, y)
+#define wmat(addr, x, y) 	wmat32fc1(addr, x, y)
 #define wmat2(addr, x, y) 	wmat32fc2(addr, x, y)
-//#define wmat4(addr, x, y) 	wmat32fc4(addr, x, y)
 
 /**
  * @reference: opencv cpu implementation and https://en.wikipedia.org/wiki/Bicubic_interpolation

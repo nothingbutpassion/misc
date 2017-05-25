@@ -1,25 +1,16 @@
 /**
  * @brief the following macros are used for accessing img(x, y)
  */
-//#define rmat8sc4(addr, x, y) ((__global const char4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc1(addr, x, y) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc2(addr, x, y) ((__global const float2*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-//#define rmat32fc4(addr, x, y) ((__global const float4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-
-//#define wmat8sc4(addr, x, y) ((__global char4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-//#define wmat8uc4(addr, x, y) ((__global uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc1(addr, x, y) ((__global float*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc2(addr, x, y) ((__global float2*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-//#define wmat32fc4(addr, x, y) ((__global float4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-
 #define rmat(addr, x, y) 	rmat32fc1(addr, x, y)
 #define rmat2(addr, x, y) 	rmat32fc2(addr, x, y)
-//#define rmat4(addr, x, y) 	rmat32fc4(addr, x, y)
-
 #define wmat(addr, x, y) 	wmat32fc1(addr, x, y)
 #define wmat2(addr, x, y) 	wmat32fc2(addr, x, y)
-//#define wmat4(addr, x, y) 	wmat32fc4(addr, x, y)
+
 
 /**
  * @brief motion detection
@@ -39,6 +30,38 @@ __kernel void motion_detection(
 	}
 }
 
+__kernel void motion_detection_v2(
+	__global const uchar4* cur, int cur_step, int cur_offset, int cur_rows, int cur_cols,
+	__global const uchar4* pre, int pre_step, int pre_offset,
+	__global float* motion, int motion_step, int motion_offset) 
+{
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+	if (x < cur_cols && y < cur_rows) {
+		float m = 
+			( fabs((float)rmat8uc4(cur, x, y).x - (float)rmat8uc4(pre, x, y).x)
+			+ fabs((float)rmat8uc4(cur, x, y).y - (float)rmat8uc4(pre, x, y).y)
+			+ fabs((float)rmat8uc4(cur, x, y).z - (float)rmat8uc4(pre, x, y).z))/(3.0f*255.0f);
+		
+		const float top_bottom_thresh = 0.3f;  
+		float delta;
+		if (y < cur_rows * top_bottom_thresh) {
+			delta = y / (cur_rows * top_bottom_thresh); 
+		} else if (y > cur_rows* (1.0f - top_bottom_thresh)) {
+			delta = (cur_rows - y) / (cur_rows * top_bottom_thresh);
+		} else {
+			delta = 1.01f;
+		}
+		if (delta < 1.01f) {
+			if (delta < 0.1f) {
+				delta = 0.1f;
+			}
+			m *= delta;
+		}
+		wmat(motion, x, y) = m;
+	}
+}
+
 /**
  * @brief adjust flow toward previous
  */
@@ -52,6 +75,22 @@ __kernel void adjust_flow_toward_previous(
 	if (x < cur_cols && y < cur_rows) {
 		float w = 1.0f - rmat(motion, x, y);
 		wmat2(cur, x, y) = (1.0f - w) * rmat2(cur, x, y) + w * rmat2(pre, x, y);
+	}
+}
+__kernel void adjust_flow_toward_previous_v2(
+	__global float2* cur, int cur_step, int cur_offset, int cur_rows, int cur_cols,
+	__global const float2* pre, int pre_step, int pre_offset,
+	__global const float* motion, int motion_step, int motion_offset,
+	float motion_threshhold) 
+{
+    int x = get_global_id(0);
+    int y = get_global_id(1);
+	if (x < cur_cols && y < cur_rows) {
+		float m = rmat(motion, x, y);
+		if (m <= motion_threshhold) {
+			float w = 1.0f - m;
+			wmat2(cur, x, y) = (1.0f - w) * rmat2(cur, x, y) + w * rmat2(pre, x, y);	// 	wmat2(cur, x, y) = m*rmat2(cur, x, y) + (1-m)*rmat2(pre, x, y) is better ?
+		}
 	}
 }
 
