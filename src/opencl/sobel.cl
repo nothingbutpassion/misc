@@ -6,7 +6,6 @@
 #define rmat(addr, x, y) 	rmat32fc1(addr, x, y)
 #define wmat(addr, x, y) 	wmat32fc1(addr, x, y)
 
-
 /*
 __constant sobel_x_kernel[3][3] = { 
 	{-1,  0, 1},
@@ -19,7 +18,7 @@ __constant int sobel_y_kernel[3][3] = {
 	{ 1,  2,  1} 
 };
 
-__kernel void sobel_x_border_replicate(
+__kernel void sobel_x_3_border_replicate(
 	__global const float* src, int src_step, int src_offset,
 	__global float* dst, int dst_step, int dst_offset, int dst_rows, int dst_cols)
 {
@@ -38,7 +37,7 @@ __kernel void sobel_x_border_replicate(
 	}
 }
 
-__kernel void sobel_y_border_replicate(
+__kernel void sobel_y_3_border_replicate(
 	__global const float* src, int src_step, int src_offset,
 	__global float* dst, int dst_step, int dst_offset, int dst_rows, int dst_cols)
 {
@@ -57,7 +56,6 @@ __kernel void sobel_y_border_replicate(
 	}
 }
 */
-
 
 __kernel void sobel_x_1_border_replicate(
 	__global const float* src, int src_step, int src_offset,
