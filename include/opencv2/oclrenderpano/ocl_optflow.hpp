@@ -45,7 +45,8 @@ the use of this software, even if advised of the possibility of such damage.
 namespace cv {
 namespace ocl {
 namespace imvt {
-
+CV_EXPORTS_W void oclSobleX(const UMat& src, UMat& dst);
+CV_EXPORTS_W void oclSobleY(const UMat& src, UMat& dst);
 CV_EXPORTS_W void oclScale(const UMat& src, UMat& dst, float factor);
 CV_EXPORTS_W void oclResize(const UMat& src, UMat& dst, Size dsize);
 CV_EXPORTS_W void oclMotionDetection(const UMat& cur, const UMat& pre, UMat& motion);
@@ -72,7 +73,7 @@ CV_EXPORTS_W void oclSweepFromRight(
 CV_EXPORTS_W void oclSweepFromBottom(
 	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y,
 	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow);
-
+CV_EXPORTS_W void oclGaussianBlur(const UMat& src, UMat& dst, Size ksize, double sigma);
 
 enum class DirectionHint {
 	UNKNOWN,

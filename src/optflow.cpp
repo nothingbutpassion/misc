@@ -11,6 +11,32 @@ namespace imvt {
 
 using namespace std;
 
+CV_EXPORTS_W void oclSobleX(const UMat& src, UMat& dst) {
+	CV_Assert(src.type() == CV_32FC1);
+	UMat s = src;
+    dst.create(s.size(), s.type()); 
+	string kernelName = string("sobel_x_1_border_replicate");
+    ocl::Kernel k(kernelName.c_str(), ocl::oclrenderpano::sobel_oclsrc);
+    k.args(ocl::KernelArg::ReadOnlyNoSize(src), 
+        ocl::KernelArg::WriteOnly(dst));
+    size_t globalsize[] = {dst.cols, dst.rows};
+    size_t localsize[] = {16, 16};
+    k.run(2, globalsize, localsize, false);
+}
+
+CV_EXPORTS_W void oclSobleY(const UMat& src, UMat& dst) {
+	CV_Assert(src.type() == CV_32FC1);
+	UMat s = src;
+	dst.create(s.size(), s.type());
+	string kernelName = string("sobel_y_1_border_replicate");
+	ocl::Kernel k(kernelName.c_str(), ocl::oclrenderpano::sobel_oclsrc);
+	k.args(ocl::KernelArg::ReadOnlyNoSize(src),
+		ocl::KernelArg::WriteOnly(dst));
+	size_t globalsize[] = { dst.cols, dst.rows };
+	size_t localsize[] = { 16, 16 };
+	k.run(2, globalsize, localsize, false);
+}
+
 // scale operation: dst == src * ration 
 CV_EXPORTS_W void oclScale(const UMat& src, UMat& dst, float factor) {
 	CV_Assert(src.type() == CV_32FC1 || src.type() == CV_32FC2 || src.type() == CV_32FC4 || src.type() == dst.type());
@@ -218,6 +244,41 @@ CV_EXPORTS_W void oclSweepFromBottomRight(
 	oclSweepFromBottom(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
 }
 
+CV_EXPORTS_W void oclGaussianBlur(const UMat& src, UMat& dst, Size ksize, double sigma) {
+
+	CV_Assert(src.type() == CV_32FC1 || src.type() == CV_32FC2);
+
+	int depth = CV_MAT_DEPTH(src.type());
+	UMat s = src;
+	dst.create(s.size(), s.type());
+
+	int kernel_size = ksize.width;
+	Mat k = getGaussianKernel(kernel_size, sigma, std::max(depth, CV_32F));
+	String build_options = ocl::kernelToStr(k, depth, "KERNEL_X_DATA") + ocl::kernelToStr(k, depth, "KERNEL_Y_DATA");
+	string typeStr = src.type() == CV_32FC1 ? "_32FC1" : "_32FC2";
+	size_t globalsize[] = { dst.cols, dst.rows };
+	size_t localsize[] = { 16, 16 };
+
+	// row filter
+	string rowKernelName = string("filter_row") + typeStr;
+	ocl::Kernel rowKernel(rowKernelName.c_str(), ocl::oclrenderpano::sepfilter2d_oclsrc, build_options);
+	rowKernel.args(ocl::KernelArg::ReadOnlyNoSize(src),
+		ocl::KernelArg::WriteOnly(dst),
+		ocl::KernelArg::Constant(&kernel_size, sizeof(kernel_size)));
+	rowKernel.run(2, globalsize, localsize, false);
+
+	// col filter
+	string colKernelName = string("filter_col") + typeStr;
+	ocl::Kernel colKernel(colKernelName.c_str(), ocl::oclrenderpano::sepfilter2d_oclsrc, build_options);
+	colKernel.args(ocl::KernelArg::ReadOnlyNoSize(src),
+		ocl::KernelArg::WriteOnly(dst),
+		ocl::KernelArg::Constant(&kernel_size, sizeof(kernel_size)));
+	colKernel.run(2, globalsize, localsize, false);
+}
+
+
+
+
 struct OpticalFlow {
 	static constexpr int   kPyrMinImageSize = 24;
 	static constexpr int   kPyrMaxLevels = 1000;
@@ -348,8 +409,8 @@ struct OpticalFlow {
 		*/
         {
         UMat I0Tmp, I1Tmp;
-        GaussianBlur(I0, I0Tmp, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
-    	GaussianBlur(I1, I1Tmp, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
+        oclGaussianBlur(I0, I0Tmp, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
+    	oclGaussianBlur(I1, I1Tmp, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
     	I0 = I0Tmp;
         I1 = I1Tmp;
         }
@@ -432,7 +493,7 @@ struct OpticalFlow {
 		*/
         {
         UMat flowTmp;
-        GaussianBlur(
+        oclGaussianBlur(
     		flow,
 			flowTmp,
     		Size(kFinalFlowBlurKernelWidth, kFinalFlowBlurKernelWidth),
@@ -440,7 +501,6 @@ struct OpticalFlow {
         flow = flowTmp;
         }
 	}
-
 
     vector<UMat> buildPyramid(const UMat& src) {
         vector<UMat> pyramid = {src};
@@ -467,12 +527,18 @@ struct OpticalFlow {
 
 		// image gradients
 		UMat I0x, I0y, I1x, I1y;
+		/* @deleted
 		const int kSameDepth = -1; // same depth as source image
 		const int kKernelSize = 1;
 		Sobel(I0, I0x, kSameDepth, 1, 0, kKernelSize, 1, 0.0f, BORDER_REPLICATE);
 		Sobel(I0, I0y, kSameDepth, 0, 1, kKernelSize, 1, 0.0f, BORDER_REPLICATE);
 		Sobel(I1, I1x, kSameDepth, 1, 0, kKernelSize, 1, 0.0f, BORDER_REPLICATE);
 		Sobel(I1, I1y, kSameDepth, 0, 1, kKernelSize, 1, 0.0f, BORDER_REPLICATE);
+		*/
+		oclSobleX(I0, I0x);
+		oclSobleX(I0, I0y);
+		oclSobleX(I1, I1x);
+		oclSobleX(I1, I1y);
 
 		// blur gradients
 		const cv::Size kGradientBlurSize(kGradientBlurKernelWidth, kGradientBlurKernelWidth);
@@ -484,10 +550,10 @@ struct OpticalFlow {
 		*/
         {
 		UMat I0xTmp, I0yTmp, I1xTmp, I1yTmp;
-		GaussianBlur(I0x, I0xTmp, kGradientBlurSize, kGradientBlurSigma);
-		GaussianBlur(I0y, I0yTmp, kGradientBlurSize, kGradientBlurSigma);
-		GaussianBlur(I1x, I1xTmp, kGradientBlurSize, kGradientBlurSigma);
-		GaussianBlur(I1y, I1yTmp, kGradientBlurSize, kGradientBlurSigma);
+		oclGaussianBlur(I0x, I0xTmp, kGradientBlurSize, kGradientBlurSigma);
+		oclGaussianBlur(I0y, I0yTmp, kGradientBlurSize, kGradientBlurSigma);
+		oclGaussianBlur(I1x, I1xTmp, kGradientBlurSize, kGradientBlurSigma);
+		oclGaussianBlur(I1y, I1yTmp, kGradientBlurSize, kGradientBlurSigma);
         I0x = I0xTmp;
         I0y = I0yTmp;
         I1x = I1xTmp;
@@ -505,7 +571,7 @@ struct OpticalFlow {
         
 		// blur flow. we will regularize against this
 		UMat blurredFlow;
-		GaussianBlur(
+		oclGaussianBlur(
 			flow,
 			blurredFlow,
 			cv::Size(kBlurredFlowKernelWidth, kBlurredFlowKernelWidth),
@@ -525,9 +591,9 @@ struct OpticalFlow {
 			}
 		}
 		*/
-		oclSweepFromLeft(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
-        oclSweepFromTop(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
-		
+		//oclSweepFromLeft(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+        //oclSweepFromTop(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+        oclSweepFromTopLeft(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
         /* @deleted
         medianBlur(flow, flow, kMedianBlurSize);
         */
@@ -550,8 +616,9 @@ struct OpticalFlow {
 			}
 		}
 		*/
-        oclSweepFromRight(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
-        oclSweepFromBottom(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+        //oclSweepFromRight(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+        //oclSweepFromBottom(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+        oclSweepFromBottomRight(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
         
         /* @deleted
 		medianBlur(flow, flow, kMedianBlurSize);
@@ -664,7 +731,7 @@ struct OpticalFlow {
 
     void lowAlphaFlowDiffusion(const UMat& alpha0, const UMat& alpha1, UMat& flow) {
         UMat blurredFlow;
-        GaussianBlur(
+        oclGaussianBlur(
             flow,
             blurredFlow,
             Size(kBlurredFlowKernelWidth, kBlurredFlowKernelWidth),
