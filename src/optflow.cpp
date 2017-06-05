@@ -591,9 +591,9 @@ struct OpticalFlow {
 			}
 		}
 		*/
-		//oclSweepFromLeft(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
-        //oclSweepFromTop(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
-        oclSweepFromTopLeft(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+		oclSweepFromLeft(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+        oclSweepFromTop(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+        //oclSweepFromTopLeft(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
         /* @deleted
         medianBlur(flow, flow, kMedianBlurSize);
         */
@@ -616,9 +616,9 @@ struct OpticalFlow {
 			}
 		}
 		*/
-        //oclSweepFromRight(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
-        //oclSweepFromBottom(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
-        oclSweepFromBottomRight(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+        oclSweepFromRight(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+        oclSweepFromBottom(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+        //oclSweepFromBottomRight(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
         
         /* @deleted
 		medianBlur(flow, flow, kMedianBlurSize);

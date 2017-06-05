@@ -134,7 +134,6 @@ struct RenderContext {
         }
 		threads.clear();
     }
-	mutex globalMutex;
 
 	static void renderChunkThread(RenderContext* c) {
 		// initialize OpenCL and SVM if necessary
@@ -147,16 +146,12 @@ struct RenderContext {
 			// get render task from input queue
 			LOGI("thread %u is waiting input\n", this_thread::get_id());
 			RenderTask t = c->inQueue.dequeue();
+
 			LOGI("thread %u is got input: %d\n", this_thread::get_id(), t.index);
-
-			
-
 			// exit this thread if stop task received
 			if (t.index == -1) {
 				break;
 			}
-
-			//unique_lock<mutex> l(c->globalMutex);
 
 			// compute optical flows
 			UMat flowLtoR;
@@ -179,8 +174,6 @@ struct RenderContext {
 				flowRtoL,
 				DirectionHint::RIGHT,
 				t.motionThreshold);
-			//ocl::Queue::getDefault().finish();
-			//l.unlock();
 
 			// combine novel views
 			*(t.chunk) = oclCombineLazyNovelViews(
@@ -198,8 +191,6 @@ struct RenderContext {
 
 			// wait for opencl completed
 			ocl::Queue::getDefault().finish();
-			
-
 			LOGI("thread %u is finished input: %d\n", this_thread::get_id(), t.index);
  
 			// put render result to output queue
@@ -255,13 +246,13 @@ CV_EXPORTS_W bool oclInitialize() {
 		putenv("OPENCV_OPENCL_DEVICE=:GPU:0");
 	}
 	if (!getenv("OPENCV_OPENCL_BUFFERPOOL_LIMIT")) {
-		putenv("OPENCV_OPENCL_BUFFERPOOL_LIMIT=4096MB");
+		putenv("OPENCV_OPENCL_BUFFERPOOL_LIMIT=2048MB");
 	}
 	if (!getenv("OPENCV_OPENCL_HOST_PTR_BUFFERPOOL_LIMIT")) {
-		putenv("OPENCV_OPENCL_HOST_PTR_BUFFERPOOL_LIMIT=4096MB");
+		putenv("OPENCV_OPENCL_HOST_PTR_BUFFERPOOL_LIMIT=2048MB");
 	}
 	if (!getenv("OPENCV_OPENCL_SVM_BUFFERPOOL_LIMIT")) {
-		putenv("OPENCV_OPENCL_SVM_BUFFERPOOL_LIMIT=4096MB");
+		putenv("OPENCV_OPENCL_SVM_BUFFERPOOL_LIMIT=2048MB");
 	}
 	if (ocl::haveOpenCL()) {
 		ocl::setUseOpenCL(true);
