@@ -83,14 +83,28 @@ __kernel void adjust_flow_toward_previous_v2(
 	__global const float* motion, int motion_step, int motion_offset,
 	float motion_threshhold) 
 {
-    int x = get_global_id(0);
-    int y = get_global_id(1);
+	int x = get_global_id(0);
+	int y = get_global_id(1);
+
 	if (x < cur_cols && y < cur_rows) {
-		float m = rmat(motion, x, y);
-		if (m <= motion_threshhold) {
-			float w = 1.0f - m;
-			wmat2(cur, x, y) = (1.0f - w) * rmat2(cur, x, y) + w * rmat2(pre, x, y);	// 	wmat2(cur, x, y) = m*rmat2(cur, x, y) + (1-m)*rmat2(pre, x, y) is better ?
+		const float top_bottom_thresh = 0.2f;
+		float flowMotion = rmat(motion, x, y);
+		if (y < cur_rows * top_bottom_thresh || y > cur_rows* (1 - top_bottom_thresh)) {
+			//pass we assume there is little move in such area.. 
+		} else {
+			if (flowMotion > motion_threshhold) {
+				flowMotion = 1.0;
+			}
 		}
+		float w = 1.0f - flowMotion;
+		wmat2(cur, x, y) = (1.0f - w) * rmat2(cur, x, y) + w * rmat2(pre, x, y);
+		/* @optimized
+		const float top_bottom_thresh = 0.2f;
+		float flowMotion = rmat(motion, x, y);
+		if (y < cur_rows * top_bottom_thresh || y > cur_rows* (1 - top_bottom_thresh) || flowMotion <= motion_threshhold) {
+			wmat2(cur, x, y)  = flowMotion * rmat2(cur, x, y)  + (1 - flowMotion) * rmat2(pre, x, y);
+		}
+		*/
 	}
 }
 

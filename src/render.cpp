@@ -18,9 +18,10 @@
 #include "precomp.hpp"
 #include "opencv2/oclrenderpano/ocl_optflow.hpp"
 #include "opencv2/oclrenderpano/ocl_novelview.hpp"
+#include "opencv2/oclrenderpano/ocl_coloradjust.hpp"
 
-#define LOGI printf
-//#define LOGI(...)
+//#define LOGI printf
+#define LOGI(...)
 
 namespace cv {
 namespace ocl {
@@ -184,10 +185,15 @@ struct RenderContext {
 				flowRtoL);
 
 			// save previous images/flows
-			c->preImageLs[t.index] = *(t.imageL);
-			c->preImageRs[t.index] = *(t.imageR);
-			c->preFlowLtoRs[t.index] = flowLtoR;
-			c->preFlowRtoLs[t.index] = flowRtoL;
+			//c->preImageLs[t.index] = *(t.imageL);
+			//c->preImageRs[t.index] = *(t.imageR);
+			//c->preFlowLtoRs[t.index] = flowLtoR;
+			//c->preFlowRtoLs[t.index] = flowRtoL;
+
+			t.imageL->copyTo(c->preImageLs[t.index]);
+			t.imageR->copyTo(c->preImageRs[t.index]);
+			flowLtoR.copyTo(c->preFlowLtoRs[t.index]);
+			flowRtoL.copyTo(c->preFlowLtoRs[t.index]);
 
 			// wait for opencl completed
 			ocl::Queue::getDefault().finish();
@@ -261,6 +267,7 @@ CV_EXPORTS_W bool oclInitialize() {
 		}
 	}
 	if (ocl::useOpenCL()) {
+		oclInitGammaLUT();
         RenderContext::instance().startThreads();
         return true;
     }
@@ -271,6 +278,7 @@ CV_EXPORTS_W void oclRelease() {
 	RenderContext& context = RenderContext::instance();
 	context.stopThreads();
 	context.release();
+	oclReleaseGammaLUT();
 }
 
 

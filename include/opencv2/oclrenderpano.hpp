@@ -16,8 +16,9 @@ namespace imvt {
 * @param chunks					return the generated panorama chunks.
 * @param motionThreshhold		the motion threshhold for computing the optical flow. 
 *
-* @note This function will increase the reference count of imageLs[i] and imageRs[i] to reserve these images for next invokation.  
-*		Call clearPreviousFrames() to clear these reserved frame buffers if necessary.
+* @note 1) This function will increase the reference count of imageLs[i] and imageRs[i] to reserve these images for next invokation.  
+*		   Call clearPreviousFrames() to clear these reserved frame buffers if necessary.
+*		2) The input chunks are not used (or ignored), and will be replaced with the output chunks. 
 */
 CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 	const std::vector<UMat>& imageLs,
@@ -30,6 +31,16 @@ CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 * @brief Clear the previous frame buffers that reserved by oclRenderStereoPanoramaChunks();
 */
 CV_EXPORTS_W void oclClearPreviousFrames();
+
+
+CV_EXPORTS_W bool oclPreColorAdjustByGamma(
+	std::vector<UMat>& spheres,
+	int standard,
+	float project_width_degree,
+	float adjust_ratio,
+	bool save_debug,
+	bool mean_color,
+	bool is_hdr);
 
 /**
 * @brief Initialize OpenCL: check device avaliablity and alloc related resource

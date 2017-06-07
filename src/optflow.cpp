@@ -260,23 +260,55 @@ CV_EXPORTS_W void oclGaussianBlur(const UMat& src, UMat& dst, Size ksize, double
 	size_t localsize[] = { 16, 16 };
 
 	// row filter
+	UMat tmp(s.size(), s.type());
 	string rowKernelName = string("filter_row") + typeStr;
 	ocl::Kernel rowKernel(rowKernelName.c_str(), ocl::oclrenderpano::sepfilter2d_oclsrc, build_options);
 	rowKernel.args(ocl::KernelArg::ReadOnlyNoSize(src),
-		ocl::KernelArg::WriteOnly(dst),
+		ocl::KernelArg::WriteOnly(tmp),
 		ocl::KernelArg::Constant(&kernel_size, sizeof(kernel_size)));
 	rowKernel.run(2, globalsize, localsize, false);
 
 	// col filter
 	string colKernelName = string("filter_col") + typeStr;
 	ocl::Kernel colKernel(colKernelName.c_str(), ocl::oclrenderpano::sepfilter2d_oclsrc, build_options);
-	colKernel.args(ocl::KernelArg::ReadOnlyNoSize(src),
+	colKernel.args(ocl::KernelArg::ReadOnlyNoSize(tmp),
 		ocl::KernelArg::WriteOnly(dst),
 		ocl::KernelArg::Constant(&kernel_size, sizeof(kernel_size)));
 	colKernel.run(2, globalsize, localsize, false);
 }
 
+CV_EXPORTS_W void oclGaussianBlurV2(const UMat& src, UMat& dst, Size ksize, double sigma) {
 
+	CV_Assert(src.type() == CV_32FC1 || src.type() == CV_32FC2);
+
+	int depth = CV_MAT_DEPTH(src.type());
+	UMat s = src;
+	dst.create(s.size(), s.type());
+
+	int kernel_size = ksize.width;
+	Mat k = getGaussianKernel(kernel_size, sigma, std::max(depth, CV_32F));
+	String build_options = ocl::kernelToStr(k, depth, "KERNEL_X_DATA") + ocl::kernelToStr(k, depth, "KERNEL_Y_DATA");
+	string typeStr = src.type() == CV_32FC1 ? "_32FC1" : "_32FC2";
+	size_t globalsize[] = { dst.cols, dst.rows };
+	size_t localsize[] = { 16, 16 };
+
+	// row filter
+	UMat tmp(s.size(), s.type());
+	string rowKernelName = string("filter_row_v2") + typeStr;
+	ocl::Kernel rowKernel(rowKernelName.c_str(), ocl::oclrenderpano::sepfilter2d_oclsrc, build_options);
+	rowKernel.args(ocl::KernelArg::ReadOnlyNoSize(src),
+		ocl::KernelArg::WriteOnly(tmp),
+		ocl::KernelArg::Constant(&kernel_size, sizeof(kernel_size)));
+	rowKernel.run(2, globalsize, localsize, false);
+
+	// col filter
+	string colKernelName = string("filter_col_v2") + typeStr;
+	ocl::Kernel colKernel(colKernelName.c_str(), ocl::oclrenderpano::sepfilter2d_oclsrc, build_options);
+	colKernel.args(ocl::KernelArg::ReadOnlyNoSize(tmp),
+		ocl::KernelArg::WriteOnly(dst),
+		ocl::KernelArg::Constant(&kernel_size, sizeof(kernel_size)));
+	colKernel.run(2, globalsize, localsize, false);
+}
 
 
 struct OpticalFlow {
