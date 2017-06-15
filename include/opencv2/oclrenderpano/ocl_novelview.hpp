@@ -8,7 +8,7 @@ namespace ocl {
 namespace imvt {
 
 CV_EXPORTS_W void oclRemap(const UMat& src, UMat& dst, const UMat& map);
-CV_EXPORTS_W void oclGetFlowWarpMap(const UMat& flow, UMat& warpMap, double t);
+CV_EXPORTS_W void oclGetFlowWarpMap(const UMat& flow, UMat& warpMap, float t);
 CV_EXPORTS_W void oclCombineNovelViews(
     const UMat& imageL, float blendL, 
 	const UMat& imageR, float blendR,
@@ -17,8 +17,8 @@ CV_EXPORTS_W void oclCombineLazyViews(
     const UMat& imageL, const UMat& imageR, 
     const UMat& flowMagL, const UMat& flowMagR, UMat& blendImage);
 CV_EXPORTS_W void oclGetWarpOpticalFlow(const UMat& warpBuffer, UMat& warpFlow);
-CV_EXPORTS_W void oclGetWarpComposition(const UMat& warpBuffer, const UMat& warpFlow, UMat& warpComposition);
-CV_EXPORTS_W void oclGetNovelViewFlowMag(const UMat& warpBuffer, const UMat& warpFlow, UMat& novelView, UMat& flowMag);
+CV_EXPORTS_W void oclGetWarpComposition(const UMat& warpBuffer, const UMat& warpFlow, UMat& warpComposition, int invertT);
+CV_EXPORTS_W void oclGetNovelViewFlowMag(const UMat& warpBuffer, const UMat& warpFlow, UMat& novelView, UMat& flowMag, int invertT);
 
 CV_EXPORTS_W std::pair<UMat, UMat> oclCombineLazyNovelViews(
 	const UMat& warpL,

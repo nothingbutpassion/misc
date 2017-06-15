@@ -659,5 +659,83 @@ __kernel void sweep_from_bottom(
 }
 
 
+__kernel void sweep_to(
+	__global const float* alpha0, int alpha0_step, int alpha0_offset,
+	__global const float* alpha1, int alpha1_step, int alpha1_offset,
+	__global const float* I0x, int I0x_step, int I0x_offset,
+	__global const float* I0y, int I0y_step, int I0y_offset,
+	__global const float* I1x, int I1x_step, int I1x_offset,
+	__global const float* I1y, int I1y_step, int I1y_offset,
+	__global const float2* blurred, int blurred_step, int blurred_offset,
+	__global float2* flow, int flow_step, int flow_offset, int flow_rows, int flow_cols,
+	int dx, int dy)
+{
+	int k = get_global_id(0);
+	if (k < flow_rows + flow_cols - 1) {
+		/*
+		int start_x;
+		int start_y;
+		if (dx == 1 && dy == 1) {
+			// x: 0, 1, 2, ..., cols-1 	0, 	..., 0
+			// y: 0, 0, 0, ..., 0,		1, 	..., rows-1
+			start_x = k < flow_cols ? k : 0;
+			start_y = k < flow_cols ? 0 : k - flow_cols + 1;
+		} else if (dx == 1 && dy == -1) {
+			// x: 0, 1, 2, ..., cols-1 	0, 	..., 0
+			// y: rows-1,, ..., rows-1,	0, 	..., rows-2
+			start_x = k < flow_cols ? k : 0;
+			start_y = k < flow_cols ? flow_rows - 1 : k - flow_cols;
+		} else if (dx == -1 && dy == -1) {
+			// x: 0, 1, 2, ..., cols-1 	cols-1, ..., cols-1
+			// y: rows-1,, ..., rows-1,	0,      ..., rows-2
+			start_x = k < flow_cols ? k : flow_cols - 1;
+			start_y = k < flow_cols ? flow_rows - 1 : k - flow_cols;
+		} else {
+			// x: 0, 1, 2, ..., cols-1 	cols-1, ..., cols-1
+			// y: 0, 0, 0, ..., 0,		1,      ..., rows-1
+			start_x = k < flow_cols ? k : flow_cols - 1;
+			start_y = k < flow_cols ? 0 : k - flow_cols + 1;
+		}
+		*/
+		int start_x = k < flow_cols ? k : dx == 1 ? 0 : flow_cols - 1;
+		int start_y = k < flow_cols ? (dy == 1 ? 0 : flow_rows -1) : (dy == 1 ? k - flow_cols + 1 : k - flow_cols);
+		
+		for (int x=start_x, y=start_y; 0 <= x && x < flow_cols && 0 <= y && y < flow_rows; x += dx, y += dy) {
+			
+			if (rmat(alpha0, x, y) > kUpdateAlphaThreshold && rmat(alpha1, x, y) > kUpdateAlphaThreshold) {
+				float currErr = error_function(
+					I0x, I0x_step, I0x_offset,
+					I0y, I0y_step, I0y_offset,
+					I1x, I1x_step, I1x_offset,
+					I1y, I1y_step, I1y_offset,
+					blurred, blurred_step, blurred_offset,
+					flow_rows, flow_cols,
+					x, y, rmat2(flow, x, y));
+					
+				if (0 <= x-dx && x-dx < flow_cols && 0 <= y-dy && y-dy < flow_rows) {
+					propose_flow_update(
+						I0x, I0x_step, I0x_offset,
+						I0y, I0y_step, I0y_offset,
+						I1x, I1x_step, I1x_offset,
+						I1y, I1y_step, I1y_offset,
+						blurred, blurred_step, blurred_offset,
+						flow, flow_step, flow_offset, flow_rows, flow_cols,
+						x, y, rmat2(flow, x-dx, y-dy), &currErr);
+				}
+				
+				wmat2(flow, x, y) -= kGradientStepSize * error_gradient(
+					I0x, I0x_step, I0x_offset,
+					I0y, I0y_step, I0y_offset,
+					I1x, I1x_step, I1x_offset,
+					I1y, I1y_step, I1y_offset,
+					blurred, blurred_step, blurred_offset,
+					flow, flow_step, flow_offset, flow_rows, flow_cols,
+					x, y, currErr);
+			}
+		}
+	}
+}
+
+
 
 

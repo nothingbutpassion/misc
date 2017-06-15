@@ -23,7 +23,8 @@ CV_EXPORTS_W void oclRemap(const UMat& src, UMat& dst, const UMat& map) {
 	CV_Assert(src.type() == CV_8UC4 || src.type() == CV_32FC2);
 	CV_Assert(map.type() == CV_32FC2);
 	UMat s = src;
-	dst.create(src.size(), s.type());
+	// dst.create(s.size(), s.type());
+	dst.create(map.size(), s.type());
 	string srcType = s.type() == CV_8UC4 ? "_8UC4" : "_32FC2";
 	string mapType = "_32FC2";
 	string kernelName = string("remap") + srcType + mapType;

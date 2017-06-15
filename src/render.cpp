@@ -16,6 +16,9 @@
 #include <condition_variable>
 
 #include "precomp.hpp"
+#include "opencv2/core/opencl/runtime/opencl_core.hpp"
+#include "opencv2/core/opencl/runtime/opencl_core_wrappers.hpp"
+
 #include "opencv2/oclrenderpano/ocl_optflow.hpp"
 #include "opencv2/oclrenderpano/ocl_novelview.hpp"
 #include "opencv2/oclrenderpano/ocl_coloradjust.hpp"
@@ -190,10 +193,10 @@ struct RenderContext {
 			//c->preFlowLtoRs[t.index] = flowLtoR;
 			//c->preFlowRtoLs[t.index] = flowRtoL;
 
-			t.imageL->copyTo(c->preImageLs[t.index]);
-			t.imageR->copyTo(c->preImageRs[t.index]);
-			flowLtoR.copyTo(c->preFlowLtoRs[t.index]);
-			flowRtoL.copyTo(c->preFlowLtoRs[t.index]);
+			c->preImageLs[t.index] = t.imageL->clone();
+			c->preImageRs[t.index] = t.imageR->clone();
+			c->preFlowLtoRs[t.index] = flowLtoR.clone();
+			c->preFlowRtoLs[t.index] = flowRtoL.clone();
 
 			// wait for opencl completed
 			ocl::Queue::getDefault().finish();
@@ -247,19 +250,84 @@ CV_EXPORTS_W void oclClearPreviousFrames() {
 	context.release();
 }
 
-CV_EXPORTS_W bool oclInitialize() {
-	if (!getenv("OPENCV_OPENCL_DEVICE")) {
-		putenv("OPENCV_OPENCL_DEVICE=:GPU:0");
+
+
+static bool oclSelectDevice(string& device) {
+	// no platforms
+	vector<ocl::PlatformInfo> platformInfos;
+	ocl::getPlatfomsInfo(platformInfos);
+	if (platformInfos.size() == 0) {
+		return false;
 	}
+
+	// select AMD GPU devices
+	vector<ocl::Device> devices;
+	for (ocl::PlatformInfo& platform : platformInfos) {
+		for (int i = 0; i < platform.deviceNumber(); i++) {
+			ocl::Device device;
+			platform.getDevice(device, i);
+			if (device.available()
+				&& device.isAMD()
+				&& device.type() == CL_DEVICE_TYPE_GPU
+				&& (device.globalMemSize() >> 30) >= 4) {
+				devices.push_back(device);
+			}
+		}
+	}
+	if (devices.size() == 0) {
+		return false;
+	}
+
+	// select the device that has max global mem size
+	string deviceName = devices[0].name();
+	size_t maxMemSize = devices[0].globalMemSize();
+	for (int i = 1; i < devices.size(); ++i) {
+		if (devices[i].globalMemSize() > maxMemSize) {
+			deviceName = devices[i].name();
+			maxMemSize = devices[i].globalMemSize();
+		}
+	}
+	device = "AMD:GPU:" + deviceName;
+}
+
+
+
+CV_EXPORTS_W bool oclDeviceAvailable() {
+	string device;
+	return oclSelectDevice(device);
+}
+
+
+CV_EXPORTS_W bool oclInitialize() {
+	string device;
+	if (!oclSelectDevice(device)) {
+		return false;
+	}
+
+	char value[64];
+	if (!getenv("OPENCV_OPENCL_DEVICE")) {
+		snprintf(value, sizeof(value), "OPENCV_OPENCL_DEVICE=%s", device.c_str());
+		putenv(value);
+	}
+
+	//size_t oclMemLimit = (1UL << 31);
+	//size_t maxMemSize = ocl::Device::getDefault().globalMemSize();
+	//size_t bufferPoolSize = maxMemSize > oclMemLimit ? (oclMemLimit >> 20) : (maxMemSize >> 20);
+
+	size_t bufferPoolSize = ocl::Device::getDefault().globalMemSize() >> 20;
 	if (!getenv("OPENCV_OPENCL_BUFFERPOOL_LIMIT")) {
-		putenv("OPENCV_OPENCL_BUFFERPOOL_LIMIT=2048MB");
+		snprintf(value, sizeof(value), "OPENCV_OPENCL_BUFFERPOOL_LIMIT=%luMB", bufferPoolSize);
+		putenv(value);
 	}
 	if (!getenv("OPENCV_OPENCL_HOST_PTR_BUFFERPOOL_LIMIT")) {
-		putenv("OPENCV_OPENCL_HOST_PTR_BUFFERPOOL_LIMIT=2048MB");
+		snprintf(value, sizeof(value), "OPENCV_OPENCL_HOST_PTR_BUFFERPOOL_LIMIT=%luMB", bufferPoolSize);
+		putenv(value);
 	}
 	if (!getenv("OPENCV_OPENCL_SVM_BUFFERPOOL_LIMIT")) {
-		putenv("OPENCV_OPENCL_SVM_BUFFERPOOL_LIMIT=2048MB");
+		snprintf(value, sizeof(value), "OPENCV_OPENCL_SVM_BUFFERPOOL_LIMIT=%luMB", bufferPoolSize);
+		putenv(value);
 	}
+
 	if (ocl::haveOpenCL()) {
 		ocl::setUseOpenCL(true);
 		if (ocl::haveSVM()) {

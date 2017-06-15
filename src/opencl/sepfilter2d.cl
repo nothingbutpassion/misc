@@ -1,8 +1,11 @@
 /**
  * @brief the following macros are used for accessing img(x, y)
  */
+#define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc1(addr, x, y) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc2(addr, x, y) ((__global const float2*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+
+#define wmat8uc4(addr, x, y) ((__global uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc1(addr, x, y) ((__global float*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc2(addr, x, y) ((__global float2*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 
@@ -94,6 +97,45 @@ __kernel void filter_col_32FC2(
 		wmat2(dst, x, y) = sum;
 	}
 }
+
+__kernel void filter_row_8UC4(
+	__global const uchar4* src, int src_step, int src_offset,
+	__global uchar4* dst, int dst_step, int dst_offset, int dst_rows, int dst_cols,
+	int col_kernel_size)
+{
+	int x = get_global_id(0);
+	int y = get_global_id(1);
+	if (x < dst_cols && y < dst_rows) {
+		float4 sum = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
+		for (int dx=-col_kernel_size/2; dx <= col_kernel_size/2; ++dx) {
+			int src_x = EXTRAPOLATE(x + dx, dst_cols - 1);
+			sum += convert_float4(rmat8uc4(src, src_x, y))*kernel_x[dx+col_kernel_size/2];
+		}
+		wmat8uc4(dst, x, y) = convert_uchar4_sat(sum);
+	}
+}
+
+__kernel void filter_col_8UC4(
+	__global const uchar4* src, int src_step, int src_offset,
+	__global uchar4* dst, int dst_step, int dst_offset, int dst_rows, int dst_cols,
+	int row_kernel_size)
+{
+	int x = get_global_id(0);
+	int y = get_global_id(1);
+	if (x < dst_cols && y < dst_rows) {
+		float4 sum = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
+		for (int dy=-row_kernel_size/2; dy <= row_kernel_size/2; ++dy) {
+			int src_y = EXTRAPOLATE(y + dy, dst_rows - 1);
+			sum += convert_float4(rmat8uc4(src, x, src_y))*kernel_y[dy+row_kernel_size/2];
+		}
+		wmat8uc4(dst, x, y) = convert_uchar4_sat(sum);
+	}
+}
+
+
+
+
+
 
 #define MAX_LOCAL_ROWS 32
 #define MAX_LOCAL_COLS 32

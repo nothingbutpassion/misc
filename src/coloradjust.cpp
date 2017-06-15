@@ -78,7 +78,6 @@ float calcBrightnessRatio16(UMat L, UMat R, float avg = 0.0, bool mean_color = f
 	//Vec4z colorVecR = mean(R);
 	Vec4z colorVec = sum(L)/(L.rows*L.cols);
 	Vec4z colorVecR = sum(R)/(R.rows*R.cols);
-
 	
 	if (mean_color) {
 		l = (colorVec[0] + colorVec[1] + colorVec[2]) / 3;
