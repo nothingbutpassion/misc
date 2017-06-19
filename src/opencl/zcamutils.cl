@@ -83,3 +83,14 @@ __kernel void offset_horizontal_wrap(
 
 
 
+__kernel void remove_chunk_line(
+	__global uchar4* chunk, int chunk_step, int chunk_offset, int chunk_rows, int chunk_cols)
+{
+	int y = get_global_id(0);
+	if (y < chunk_rows) {
+		wmat8uc4(chunk, chunk_cols - 1, y) = rmat8uc4(chunk, chunk_cols - 2, y);
+	}
+	
+}
+
+

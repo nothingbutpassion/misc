@@ -31,6 +31,34 @@ CV_EXPORTS_W void oclRelease();
 
 
 /**
+* @brief Remap each image contained in srcImages with specified x/y map
+*
+* @param srcImages	the input images to be remaped, (type must be CV_8UC3 or CV_8UC4)
+* @param xmap		the x direction map (type must be CV_32FC1)
+* @param ymap		the y direction map.(type must be CV_32FC1)
+* @param dstImages	return the remapped images (type is CV_8UC4)
+*
+*/
+CV_EXPORTS_W void oclProjection(
+	const std::vector<UMat>& srcImages,
+	const std::vector<UMat>& xmap,
+	const std::vector<UMat>& ymap,
+	std::vector<UMat>& dstImages);
+
+/**
+* @brief Pre-adjust images color by gamma method
+*/
+CV_EXPORTS_W bool oclPreColorAdjustByGamma(
+	std::vector<UMat>& spheres,
+	int standard,
+	float project_width_degree,
+	float adjust_ratio,
+	bool save_debug,
+	bool mean_color,
+	bool is_hdr);
+
+
+/**
 * @brief Render each imageLs[i] and imageRs[i] to generate chunks[i].
 *  
 * @param imageLs				the left overlap images.
@@ -56,32 +84,15 @@ CV_EXPORTS_W void oclClearPreviousFrames();
 
 
 /**
-* @brief Pre-adjust images color by gamma method 
-*/
-CV_EXPORTS_W bool oclPreColorAdjustByGamma(
-	std::vector<UMat>& spheres,
-	int standard,
-	float project_width_degree,
-	float adjust_ratio,
-	bool save_debug,
-	bool mean_color,
-	bool is_hdr);
-
-
-/**
-* @brief Remap each image contained in srcImages with specified x/y map
-* 
-* @param srcImages	the input images to be remaped, (type must be CV_8UC3 or CV_8UC4)
-* @param xmap		the x direction map (type must be CV_32FC1)
-* @param ymap		the y direction map.(type must be CV_32FC1)
-* @param dstImages	return the remapped images (type is CV_8UC4)
+* @brief Applies horizontal concatenation to given matrices.
 *
+* @param srcImages	input array or vector of matrices. all of the matrices must have the same number of rows and the same depth (CV_8UC4).
+* @param dstImage	output array. It has the same number of rows and depth as the src, and the sum of cols of the src.
 */
-CV_EXPORTS_W void oclProjection(
+CV_EXPORTS_W void oclStackHorizontal(
 	const std::vector<UMat>& srcImages,
-	const std::vector<UMat>& xmap,
-	const std::vector<UMat>& ymap,
-	std::vector<UMat>& dstImages);
+	UMat& dstImage);
+
 
 
 /**
@@ -101,25 +112,18 @@ CV_EXPORTS_W void oclSharpImage(
 	float factor);
 
 
-/** 
-* @brief Applies horizontal concatenation to given matrices.
-*
-* @param srcImages	input array or vector of matrices. all of the matrices must have the same number of rows and the same depth (CV_8UC4).
-* @param dstImage	output array. It has the same number of rows and depth as the src, and the sum of cols of the src.
-*/
-CV_EXPORTS_W void oclStackHorizontal(
-	const std::vector<UMat>& srcImages,
-	UMat& dstImage);
-
-
 /**
-* @brief Remap srcImage with offset warp
+* @brief Remap srcImage with offset warp.
 */
 CV_EXPORTS_W void oclOffsetHorizontalWrap(
 	const UMat& srcImage,
 	float offset,
 	UMat& dstImage);
 
+/**
+* @brief Remove the chunk line for all chunks.
+*/
+CV_EXPORTS_W void oclRemoveChunkLines(std::vector<UMat>& chunks);
 
 
 }	// namespace imvt

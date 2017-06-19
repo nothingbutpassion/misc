@@ -140,6 +140,7 @@ struct RenderContext {
     }
 
 	static void renderChunkThread(RenderContext* c) {
+
 		// initialize OpenCL and SVM if necessary
 		ocl::useOpenCL();
 		ocl::Context::getDefault().useSVM();
@@ -249,7 +250,6 @@ CV_EXPORTS_W void oclClearPreviousFrames() {
 	RenderContext& context = RenderContext::instance();
 	context.release();
 }
-
 
 
 static bool oclSelectDevice(string& device) {

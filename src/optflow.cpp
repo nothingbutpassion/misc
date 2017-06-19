@@ -581,6 +581,10 @@ struct OpticalFlow {
 				adjustFlowTowardPrevious(prevFlowPyramid[level], motionPyramid[level], flow);
 				*/
 				oclAdjustFlowTowardPreviousV2(prevFlowPyramid[level], motionPyramid[level], flow, motionThreshhold);
+
+				/* @optimized */ 
+				prevFlowPyramid[level] = UMat();
+				motionPyramid[level] = UMat();
 			}
 			
 			if (level > 0) { // scale the flow up to the next size
@@ -596,6 +600,12 @@ struct OpticalFlow {
                 
 				oclScale(flow, 1.0f/kPyrScaleFactor);
 			}
+
+			/* @optimized */
+			pyramidI0[level] = UMat();
+			pyramidI1[level] = UMat();
+			pyramidAlpha0[level] = UMat();
+			pyramidAlpha1[level] = UMat();
 		}
 		
 		// scale the flow result back to full size

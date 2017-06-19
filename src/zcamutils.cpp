@@ -22,7 +22,7 @@ using namespace std;
 
 
 
-void oclCubicRemap(const UMat& src, UMat& dst, const UMat& mapx, const UMat& mapy) {
+static void oclCubicRemap(const UMat& src, UMat& dst, const UMat& mapx, const UMat& mapy) {
 	CV_Assert(src.type() == CV_8UC4 || src.type() == CV_8UC3);
 	CV_Assert(mapx.type() == CV_32FC1 && mapy.type() == CV_32FC1 || mapx.size() == mapy.size());
 	UMat s = src;
@@ -129,6 +129,23 @@ CV_EXPORTS_W void oclOffsetHorizontalWrap(const UMat& srcImage, float offset, UM
 		BORDER_WRAP);
 
 	dstImage = warpedImage;
+}
+
+
+
+static void olcRemoveChunkLine(UMat& chunk) {
+	CV_Assert(chunk.type() == CV_8UC4);
+	ocl::Kernel k("remove_chunk_line", ocl::oclrenderpano::zcamutils_oclsrc);
+	k.args(ocl::KernelArg::ReadWrite(chunk));
+	size_t globalsize[] = { chunk.rows };
+	size_t localsize[] = { 64 };
+	k.run(1, globalsize, localsize, false);
+}
+
+CV_EXPORTS_W void oclRemoveChunkLines(vector<UMat>& chunks) {
+	for (int i = 0; i < chunks.size(); ++i) {
+		olcRemoveChunkLine(chunks[i]);
+	}
 }
 
 
