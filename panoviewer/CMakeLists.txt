@@ -1,8 +1,9 @@
 #
 # Build commands: 
-#   mkdir build64 && cd build64
-#   cmake -DCMAKE_BUILD_TYPE=Release -G "Visual Studio 14 2015 Win64" ../
-#   cd ../ && cmake --build build64 --config Releas
+#   mkdir build
+#   cd build64
+#   cmake -G "Visual Studio 14 2015 Win64" ../
+#   cmake --build . --config Release
 #
 cmake_minimum_required(VERSION 2.6.0)
 project("PanoTest")
@@ -28,12 +29,10 @@ add_executable(pano_test
 include_directories(${OpenCV_INCLUDE_DIRS} ${OpenCL_INCLUDE_DIRS})
 target_link_libraries(pano_test ${OpenCV_LIBS} ${OpenCL_LIBRARIES})
 
-#set_target_properties(pano_test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
-#get_target_property(MY_EXECUTABLE_OUTPUT_DIR pano_test RUNTIME_OUTPUT_DIRECTORY)
 if(MSVC)
-	set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin/${BITNESS_SUFFIX})
+	set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 else()
-	set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin/${BITNESS_SUFFIX}/${CMAKE_BUILD_TYPE})
+	set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE})
 endif()
 
 add_custom_command(
