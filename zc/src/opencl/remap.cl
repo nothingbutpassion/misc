@@ -2,17 +2,17 @@
  * @brief the following macros are used for accessing img(x, y)
  */
 
-#define rmat8uc3(addr, x, y) 		((__global const uchar3*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step + (x)*3))[0]
-#define rmat8uc4(addr, x, y) 		((__global const uchar4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define rmat8uc3(addr, x, y, i)	((__global const uchar*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step + (x)*3))[i]
+#define rmat8uc4(addr, x, y) 	((__global const uchar4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc2(addr, x, y) 	((__global const float2*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc1(addr, x, y) 	((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 
 #define wmat8uc3(addr, x, y, i) (((__global uchar*)addr) + addr##_offset + (y)*addr##_step + (x)*3)[i]
-#define wmat8uc4(addr, x, y) 		((__global uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat8uc4(addr, x, y) 	((__global uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc2(addr, x, y) 	((__global float2*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc1(addr, x, y) 	((__global float*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 
-#define rmat(addr, x, y) 		rmat32fc1(addr, x, y)
+#define rmat(addr, x, y) 	rmat32fc1(addr, x, y)
 #define rmat2(addr, x, y) 	rmat32fc2(addr, x, y)
 #define wmat2(addr, x, y) 	wmat32fc1(addr, x, y)
 #define wmat2(addr, x, y) 	wmat32fc2(addr, x, y)
@@ -177,10 +177,18 @@ __kernel void cubic_remap_8UC3_32FC1(
 			if (y0 + dy < 0 || y0 + dy >= src_rows) {
 				v[dy+1] = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
 			} else {
-				u[0] = (0 <= x0 - 1 && x0 - 1 < src_cols) ? rmat8uc3(src, x0 - 1, y0 + dy) : (uchar3)(0, 0, 0);
-				u[1] = (0 <= x0     && x0     < src_cols) ? rmat8uc3(src, x0,     y0 + dy) : (uchar3)(0, 0, 0);
-				u[2] = (0 <= x0 + 1 && x0 + 1 < src_cols) ? rmat8uc3(src, x0 + 1, y0 + dy) : (uchar3)(0, 0, 0);
-				u[3] = (0 <= x0 + 2 && x0 + 2 < src_cols) ? rmat8uc3(src, x0 + 2, y0 + dy) : (uchar3)(0, 0, 0);
+				u[0] = (0 <= x0 - 1 && x0 - 1 < src_cols) ? 
+					(uchar3)(rmat8uc3(src, x0 - 1, y0 + dy, 0), rmat8uc3(src, x0 - 1, y0 + dy, 1), rmat8uc3(src, x0 - 1, y0 + dy, 2)) :
+					(uchar3)(0, 0, 0);
+				u[1] = (0 <= x0     && x0     < src_cols) ? 
+					(uchar3)(rmat8uc3(src, x0, y0 + dy, 0), rmat8uc3(src, x0, y0 + dy, 1), rmat8uc3(src, x0, y0 + dy, 2)) :
+					(uchar3)(0, 0, 0);
+				u[2] = (0 <= x0 + 1 && x0 + 1 < src_cols) ? 
+					(uchar3)(rmat8uc3(src, x0 + 1, y0 + dy, 0), rmat8uc3(src, x0 + 1, y0 + dy, 1), rmat8uc3(src, x0 + 1, y0 + dy, 2)) :
+					(uchar3)(0, 0, 0);
+				u[3] = (0 <= x0 + 2 && x0 + 2 < src_cols) ? 
+					(uchar3)(rmat8uc3(src, x0 + 2, y0 + dy, 0), rmat8uc3(src, x0 + 2, y0 + dy, 1) , rmat8uc3(src, x0 + 2, y0 + dy, 2)):
+					(uchar3)(0, 0, 0);
 				v[dy+1] = get_bicubic_8uc4(
 					(float4)(u[0].x, u[0].y, u[0].z, 0.0f), 
 					(float4)(u[1].x, u[1].y, u[1].z, 0.0f),  

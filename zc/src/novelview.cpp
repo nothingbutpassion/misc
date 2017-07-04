@@ -330,6 +330,29 @@ struct OCLNovelViewGeneratorLazyFlow {
 
 		return leftEyeCombined;
 	}
+
+
+	void combineLazyNovelViews(const UMat& warp, UMat& combined) {
+		pair<UMat, UMat> leftEyeFromLeft = renderLazyNovelView(
+			warp,
+			imageL,
+			flowRtoL,
+			false);
+
+		pair<UMat, UMat> leftEyeFromRight = renderLazyNovelView(
+			warp,
+			imageR,
+			flowLtoR,
+			true);
+
+		combined.create(leftEyeFromLeft.first.size(), CV_8UC4);
+		oclCombineLazyViews(
+			leftEyeFromLeft.first,
+			leftEyeFromRight.first,
+			leftEyeFromLeft.second,
+			leftEyeFromRight.second,
+			combined);
+	}
 };
 
 
@@ -367,6 +390,23 @@ CV_EXPORTS_W UMat oclCombineLazyNovelViews(
 	generatorLazyFlow.flowRtoL = flowRtoL;
 	return generatorLazyFlow.combineLazyNovelViews(warp);
 }
+
+
+CV_EXPORTS_W void oclCombineNovelViews(
+	const UMat& warp,
+	const UMat& imageL,
+	const UMat& imageR,
+	const UMat& flowLtoR,
+	const UMat& flowRtoL,
+	UMat& combined) {
+	OCLNovelViewGeneratorLazyFlow generatorLazyFlow;
+	generatorLazyFlow.imageL = imageL;
+	generatorLazyFlow.imageR = imageR;
+	generatorLazyFlow.flowLtoR = flowLtoR;
+	generatorLazyFlow.flowRtoL = flowRtoL;
+	generatorLazyFlow.combineLazyNovelViews(warp, combined);
+}
+
 
 } // imvt
 } // namespace ocl

@@ -166,8 +166,7 @@ CV_EXPORTS_W void oclSweepFromLeft(
 		ocl::KernelArg::ReadWrite(flow));
     size_t globalsize[] ={flow.rows};
     size_t localsize[] = { 64 };
-    bool succeed = k.run(1, globalsize, localsize, false);
-    CV_Assert(succeed);
+    k.run(1, globalsize, localsize, false);
 }
 
 
@@ -185,8 +184,7 @@ CV_EXPORTS_W void oclSweepFromRight(
 		ocl::KernelArg::ReadWrite(flow));
     size_t globalsize[] ={flow.rows};
     size_t localsize[] = { 64 };
-    bool succeed = k.run(1, globalsize, localsize, false);
-    CV_Assert(succeed);
+    k.run(1, globalsize, localsize, false);
 }
 
 
@@ -204,8 +202,7 @@ CV_EXPORTS_W void oclSweepFromTop(
 		ocl::KernelArg::ReadWrite(flow));
     size_t globalsize[] ={flow.cols};
     size_t localsize[] = { 64 };
-    bool succeed = k.run(1, globalsize, localsize, false);
-    CV_Assert(succeed);
+    k.run(1, globalsize, localsize, false);
 }
 
 CV_EXPORTS_W void oclSweepFromBottom(
@@ -223,8 +220,7 @@ CV_EXPORTS_W void oclSweepFromBottom(
 		ocl::KernelArg::ReadWrite(flow));
 	size_t globalsize[] = { flow.cols};
 	size_t localsize[] = { 64 };
-	bool succeed = k.run(1, globalsize, localsize, false);
-	CV_Assert(succeed);
+	k.run(1, globalsize, localsize, false);
 }
 
 
@@ -267,13 +263,11 @@ CV_EXPORTS_W void oclSweepFromTopLeft(
 		
 		size_t globalsize[] = { (i < minrc ? i + 1 : flow.rows + flow.cols - 1 - i < minrc ? flow.rows + flow.cols - 1 - i : minrc) };
 		size_t localsize[] = { 64 };
-		bool succeed = false;
 		if (i < flow.rows + flow.cols - 2) {
-			succeed = oclRunKernel(k, 1, globalsize, localsize);
+			oclRunKernel(k, 1, globalsize, localsize);
 		} else {
-			succeed = k.run(1, globalsize, localsize, false);
+			k.run(1, globalsize, localsize, false);
 		}
-		CV_Assert(succeed);
 	}
 }
 
@@ -301,14 +295,11 @@ CV_EXPORTS_W void oclSweepFromBottomRight(
 
 		size_t globalsize[] = { (i < minrc ? i + 1 : flow.rows + flow.cols - 1 - i < minrc ? flow.rows + flow.cols - 1 - i : minrc) };
 		size_t localsize[] = { 64 };
-		bool succeed = false;
 		if (i > 0) {
-			succeed = oclRunKernel(k, 1, globalsize, localsize);
+			oclRunKernel(k, 1, globalsize, localsize);
+		} else {
+			k.run(1, globalsize, localsize, false);
 		}
-		else {
-			succeed = k.run(1, globalsize, localsize, false);
-		}
-		CV_Assert(succeed);
 	}
 }
 
@@ -331,8 +322,7 @@ CV_EXPORTS_W void oclSweepTo(int dx, int dy,
 		ocl::KernelArg::Constant(&dy, sizeof(dy)));
 	size_t globalsize[] = { flow.rows + flow.cols - 1 };
 	size_t localsize[] = { 64 };
-	bool succeed = k.run(1, globalsize, localsize, false);
-	CV_Assert(succeed);
+	k.run(1, globalsize, localsize, false);
 }
 
 
@@ -434,6 +424,9 @@ struct OpticalFlow {
 	// is non-empty.
 	bool usePrevFlowTemporalRegularization = false;
 
+	// @added
+	bool useSlashSweeping = false;
+
 	// compute the flow field that warps image I1 so that it becomes like image I0.
 	// I0 and I1 are 1 byte/channel BGRA format, i.e. they have an alpha channel.
 	// it may be the case that I0 and I1 are frames in a video sequence, and some form
@@ -453,7 +446,12 @@ struct OpticalFlow {
 		DirectionHint hint,
 		float motionThreshhold = 1.0f) {
 
-		assert(prevFlow.dims == 0 || prevFlow.size() == rgba0byte.size());
+		CV_Assert(prevFlow.dims == 0 || prevFlow.size() == rgba0byte.size());
+
+		// @added
+		if (rgba0byte.cols < 500) {
+			useSlashSweeping = true;
+		}
 
 		// pre-scale everything to a smaller size. this should be faster + more stable
 		UMat rgba0byteDownscaled, rgba1byteDownscaled, prevFlowDownscaled;
@@ -466,6 +464,8 @@ struct OpticalFlow {
         */
         oclResize(rgba0byte, rgba0byteDownscaled, downscaleSize);
 		oclResize(rgba1byte, rgba1byteDownscaled, downscaleSize);
+
+
 
         /* @deleted
 		UMat motion(downscaleSize, CV_32F);
@@ -728,8 +728,11 @@ struct OpticalFlow {
 		*/
 		oclSweepFromLeft(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
         oclSweepFromTop(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
-		//oclSweepTo(1, 1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
-		//oclSweepTo(-1, 1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+		if (useSlashSweeping) {
+			oclSweepTo(1, 1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+			oclSweepTo(-1, 1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+		}
+
 		
         /* @deleted
         medianBlur(flow, flow, kMedianBlurSize);
@@ -755,8 +758,10 @@ struct OpticalFlow {
 		*/
         oclSweepFromRight(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
         oclSweepFromBottom(alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
-		//oclSweepTo(-1, -1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
-		//oclSweepTo(1, -1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+		if (useSlashSweeping) {
+			oclSweepTo(-1, -1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+			oclSweepTo(1, -1, alpha0, alpha1, I0x, I0y, I1x, I1y, blurredFlow, flow);
+		}
 	
         /* @deleted
 		medianBlur(flow, flow, kMedianBlurSize);

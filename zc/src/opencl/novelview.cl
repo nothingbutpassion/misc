@@ -1,23 +1,28 @@
+
+#pragma OPENCL EXTENSION cl_khr_fp64 : enable
+
 /**
  * @brief the following macros are used for accessing img(x, y)
  */
 #define rmat8uc4(addr, x, y) ((__global const uchar4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc1(addr, x, y) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat32fc2(addr, x, y) ((__global const float2*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-#define rmat32fc3(addr, x, y) ((__global const float3*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step + (x)*12))[0]
+
+#define rmat32fc3(addr, x, y, i) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step + (x)*12))[i]
+
 #define wmat8uc4(addr, x, y) ((__global uchar4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc1(addr, x, y) ((__global float*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc2(addr, x, y) ((__global float2*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 
-#define rmat(addr, x, y)	rmat32fc1(addr, x, y)
-#define rmat2(addr, x, y) 	rmat32fc2(addr, x, y)
-#define rmat3(addr, x, y) 	rmat32fc3(addr, x, y)
-#define wmat(addr, x, y)	wmat32fc1(addr, x, y)
-#define wmat2(addr, x, y) 	wmat32fc2(addr, x, y)
+#define rmat(addr, x, y)		rmat32fc1(addr, x, y)
+#define rmat2(addr, x, y) 		rmat32fc2(addr, x, y)
+#define rmat3(addr, x, y, i) 	rmat32fc3(addr, x, y, i)
+#define wmat(addr, x, y)		wmat32fc1(addr, x, y)
+#define wmat2(addr, x, y) 		wmat32fc2(addr, x, y)
 
 #define lerp(x0, x1, alpha)	 ((x0)*(1 - (alpha)) + (x1)*(alpha))
 
-/*
+/* @unnecessary
 Mat warpMap = Mat(Size(w, h), CV_32FC2);
 for (int y = 0; y < h; ++y) {
 for (int x = 0; x < w; ++x) {
@@ -25,7 +30,7 @@ for (int x = 0; x < w; ++x) {
 	warpMap.at<Point2f>(y, x) = Point2f(x + flowDir.x * t, y + flowDir.y * t);
 }
 }
-*/
+
 __kernel void get_flow_warp_map(
 	__global const float2* flow, int flow_step, int flow_offset,
 	__global float2* warpMap, int warpMap_step, int warpMap_offset, int warpMap_rows, int warpMap_cols,
@@ -37,8 +42,9 @@ __kernel void get_flow_warp_map(
 		wmat2(warpMap, x, y) = (float2)(x, y) + rmat2(flow, x, y)*t;
 	}		
 }
+*/
 
-/*
+/* @unnecessary
 Mat blendImage(imageL.size(), CV_8UC4);
 for (int y = 0; y < imageL.rows; ++y) {
 for (int x = 0; x < imageL.cols; ++x) {
@@ -82,7 +88,7 @@ for (int x = 0; x < imageL.cols; ++x) {
 	blendImage.at<Vec4b>(y, x) = colorMixed;
 }
 }
-*/
+
 __kernel void combine_novel_views(
 	__global const uchar4* imageL, int imageL_step, int imageL_offset,
 	__global const uchar4* imageR, int imageR_step, int imageR_offset,
@@ -132,9 +138,9 @@ __kernel void combine_novel_views(
 		wmat8uc4(blendImage, x, y) = colorMixed;
 	}
 }
+*/
 
-
-/*
+/* @unnecessary
 for (int y = 0; y < imageL.rows; ++y) {
 for (int x = 0; x < imageL.cols; ++x) {
 	const Vec4b colorL = imageL.at<Vec4b>(y, x);
@@ -179,6 +185,7 @@ for (int x = 0; x < imageL.cols; ++x) {
 }
 }
 */
+
 __kernel void combine_lazy_views(
 	__global const uchar4* imageL, int imageL_step, int imageL_offset,
 	__global const uchar4* imageR, int imageR_step, int imageR_offset,
@@ -230,6 +237,7 @@ __kernel void combine_lazy_views(
 	}
 }
 
+
 /*
 Mat warpOpticalFlow = Mat(Size(width, height), CV_32FC2);
 for (int y = 0; y < height; ++y) {
@@ -243,13 +251,13 @@ __kernel void get_warp_optical_flow(
 	__global const float3* warpBuffer, int warpBuffer_step, int warpBuffer_offset, 
 	__global float2* warpFlow, int warpFlow_step, int warpFlow_offset, int warpFlow_rows, int warpFlow_cols)
 {
+	
 	int x = get_global_id(0);
 	int y = get_global_id(1);
 	if (x < warpFlow_cols && y < warpFlow_rows) {
-		float3 lazyWarp = rmat3(warpBuffer, x, y);
-		wmat2(warpFlow, x, y) = (float2)(lazyWarp.x, lazyWarp.y);
+		wmat2(warpFlow, x, y) = (float2)(rmat3(warpBuffer, x, y, 0), rmat3(warpBuffer, x, y, 1));
 	}
-}		
+}
 	
 /*
 Mat warpComposition = Mat(Size(width, height), CV_32FC2);
@@ -273,12 +281,15 @@ __kernel void get_warp_composition(
 	int x = get_global_id(0);
 	int y = get_global_id(1);
 	if (x < warpComposition_cols && y < warpComposition_rows) {
-		float3 lazyWarp = rmat3(warpBuffer, x, y);
+		float lazyWarp_x = rmat3(warpBuffer, x, y, 0);
+		float lazyWarp_y = rmat3(warpBuffer, x, y, 1);
+		float lazyWarp_z = rmat3(warpBuffer, x, y, 2);
 		float2 flowDir = rmat2(warpFlow, x, y);
-		float t = invertT ? (1.0f - lazyWarp.z) : lazyWarp.z;
-		wmat2(warpComposition, x, y) = (float2) (lazyWarp.x + flowDir.x * t, lazyWarp.y + flowDir.y * t);	
+		float t = invertT ? (1.0f - lazyWarp_z) : lazyWarp_z;
+		wmat2(warpComposition, x, y) = (float2) (lazyWarp_x + flowDir.x * t, lazyWarp_y + flowDir.y * t);	
 	}
 }
+
 
 /*
 Mat novelViewFlowMag(novelView.size(), CV_32F);
@@ -308,8 +319,8 @@ __kernel void get_novel_view_flow_mag(
 	int x = get_global_id(0);
 	int y = get_global_id(1);
 	if (x < flowMag_cols && y < flowMag_rows) {
-		float3 lazyWarp = rmat3(warpBuffer, x, y);
-		float t = invertT ? (1.0f - lazyWarp.z) : lazyWarp.z;
+		float lazyWarp_z = rmat3(warpBuffer, x, y, 2);
+		float t = invertT ? (1.0f - lazyWarp_z) : lazyWarp_z;
 		wmat8uc4(novelView, x, y).s3 = (1.0f - t) * rmat8uc4(novelView, x, y).s3;
 		float2 flowDir = rmat2(warpFlow, x, y);										// 
 		wmat(flowMag, x, y) = sqrt(flowDir.x * flowDir.x + flowDir.y * flowDir.y);	// wmat(flowMag, x, y) = length(rmat2(warpFlow, x, y)) is better ?

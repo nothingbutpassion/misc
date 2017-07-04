@@ -250,9 +250,9 @@ float get_pix_bilinear32f_extend(
 	float xR = x - x0;
 	float yR = y - y0;
 	float f00 = rmat(img, x0, y0);
-	float f01 = rmat(img, x0, y0+1);
-	float f10 = rmat(img, x0+1, y0);
-	float f11 = rmat(img, x0+1, y0+1);
+	float f01 = rmat(img, x0, y0 + 1);
+	float f10 = rmat(img, x0 + 1, y0);
+	float f11 = rmat(img, x0 + 1, y0 + 1);
 	return f00 + (f10 - f00)*xR + (f01 - f00)*yR + (f00 + f11 - f10 - f01)*xR*yR;
 }
 

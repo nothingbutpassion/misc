@@ -13,7 +13,6 @@
 #include <queue>
 #include <thread>
 #include <mutex>
-#include <condition_variable>
 
 #include "precomp.hpp"
 #include "opencv2/core/opencl/runtime/opencl_core.hpp"
@@ -23,8 +22,8 @@
 #include "opencv2/oclrenderpano/ocl_novelview.hpp"
 #include "opencv2/oclrenderpano/ocl_coloradjust.hpp"
 
-//#define LOGI printf
-#define LOGI(...)
+#define LOGD printf
+//#define LOGD(...)
 
 namespace cv {
 namespace ocl {
@@ -70,7 +69,6 @@ struct RenderTask {
 };
 
 struct RenderContext {
-	
 
 	SafeQueue<RenderTask> inQueue;
 	SafeQueue<RenderTask> outQueue;
@@ -143,16 +141,18 @@ struct RenderContext {
 
 		// initialize OpenCL and SVM if necessary
 		ocl::useOpenCL();
-		ocl::Context::getDefault().useSVM();
+		if (ocl::haveSVM()) {
+			ocl::Context::getDefault().useSVM();
+		}
 
-		LOGI("thread %u is entered\n", this_thread::get_id());
+		LOGD("render thread %u is started\n", this_thread::get_id());
         
 		while (1) {
 			// get render task from input queue
-			LOGI("thread %u is waiting input\n", this_thread::get_id());
+			LOGD("render thread %u is waiting input task\n", this_thread::get_id());
 			RenderTask t = c->inQueue.dequeue();
 
-			LOGI("thread %u is got input: %d\n", this_thread::get_id(), t.index);
+			LOGD("render thread %u got input task: %d\n", this_thread::get_id(), t.index);
 			// exit this thread if stop task received
 			if (t.index == -1) {
 				break;
@@ -181,19 +181,15 @@ struct RenderContext {
 				t.motionThreshold);
 
 			// combine novel views
-			*(t.chunk) = oclCombineLazyNovelViews(
+			oclCombineNovelViews(
 				c->warps[t.index],
 				*(t.imageL),
 				*(t.imageR),
 				flowLtoR,
-				flowRtoL);
+				flowRtoL,
+				*(t.chunk));
 
 			// save previous images/flows
-			//c->preImageLs[t.index] = *(t.imageL);
-			//c->preImageRs[t.index] = *(t.imageR);
-			//c->preFlowLtoRs[t.index] = flowLtoR;
-			//c->preFlowRtoLs[t.index] = flowRtoL;
-
 			c->preImageLs[t.index] = t.imageL->clone();
 			c->preImageRs[t.index] = t.imageR->clone();
 			c->preFlowLtoRs[t.index] = flowLtoR.clone();
@@ -201,14 +197,15 @@ struct RenderContext {
 
 			// wait for opencl completed
 			ocl::Queue::getDefault().finish();
-			LOGI("thread %u is finished input: %d\n", this_thread::get_id(), t.index);
+			LOGD("render thread %u finished input task: %d\n", this_thread::get_id(), t.index);
  
 			// put render result to output queue
 			c->outQueue.enqueue(t);
-			LOGI("thread %u put output: %d\n", this_thread::get_id(), t.index);
+			LOGD("render thread %u enqueued output result: %d\n", this_thread::get_id(), t.index);
         }
-		LOGI("thread %u is exited\n", this_thread::get_id());
+
 		ocl::Queue::getDefault().~Queue();
+		LOGD("render thread %u is exited\n", this_thread::get_id());
 	}
 
 	void renderChunks(const vector<UMat>& imgLs, const vector<UMat>& imgRs, vector<UMat>& chunks, float motionThreshold) {
@@ -218,20 +215,54 @@ struct RenderContext {
 		}
 
 		// put render tasks to input queue
-		vector<UMat> outChunks(imgLs.size(), UMat());
+		if (chunks.size() != imgLs.size()) {
+			chunks.assign(imgLs.size(), UMat());
+		}
 		for (int index = 0; index < imgLs.size(); ++index) {
-			RenderTask task = { index, &imgLs[index], &imgRs[index], &outChunks[index], motionThreshold };
+			RenderTask task = { index, &imgLs[index], &imgRs[index], &chunks[index], motionThreshold };
 			inQueue.enqueue(task);
 		}
 
 		// get chunks from output queue
 		for (int index = 0; index < imgLs.size(); ++index) {
 			RenderTask out = outQueue.dequeue();
-			outChunks[out.index] = *(out.chunk);
+			chunks[out.index] = *(out.chunk);
 		}
-		chunks = outChunks;
 	}
 };
+
+
+static void setBufferPoolSize(size_t size) {
+	MatAllocator* allocator = ocl::getOpenCLAllocator();
+	BufferPoolController* controller = allocator->getBufferPoolController("OCL");
+	if (controller) {
+		controller->setMaxReservedSize(size);
+	}
+	controller = allocator->getBufferPoolController("HOST_ALLOC");
+	if (controller) {
+		controller->setMaxReservedSize(size);
+	}
+	controller = allocator->getBufferPoolController("SVM");
+	if (controller) {
+		controller->setMaxReservedSize(size);
+	}
+}
+
+static void releaseBufferPool() {
+	MatAllocator* allocator = ocl::getOpenCLAllocator();
+	BufferPoolController* controller = allocator->getBufferPoolController("OCL");
+	if (controller) {
+		controller->freeAllReservedBuffers();
+	}
+	controller = allocator->getBufferPoolController("HOST_ALLOC");
+	if (controller) {
+		controller->freeAllReservedBuffers();
+	}
+	controller = allocator->getBufferPoolController("SVM");
+	if (controller) {
+		controller->freeAllReservedBuffers();
+	}
+}
 
 
 CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
@@ -242,12 +273,14 @@ CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 	RenderContext& context = RenderContext::instance();
 	if (!context.isInit()) {
 		context.init(imageLs);
+		context.startThreads();
 	}
 	context.renderChunks(imageLs, imageRs, chunks, motionThreshold);
 }
 
 CV_EXPORTS_W void oclClearPreviousFrames() {
 	RenderContext& context = RenderContext::instance();
+	context.stopThreads();
 	context.release();
 }
 
@@ -260,14 +293,13 @@ static bool oclSelectDevice(string& device) {
 		return false;
 	}
 
-	// select AMD GPU devices
+	// select GPU devices
 	vector<ocl::Device> devices;
 	for (ocl::PlatformInfo& platform : platformInfos) {
 		for (int i = 0; i < platform.deviceNumber(); i++) {
 			ocl::Device device;
 			platform.getDevice(device, i);
 			if (device.available()
-				&& device.isAMD()
 				&& device.type() == CL_DEVICE_TYPE_GPU
 				&& (device.globalMemSize() >> 30) >= 4) {
 				devices.push_back(device);
@@ -287,7 +319,7 @@ static bool oclSelectDevice(string& device) {
 			maxMemSize = devices[i].globalMemSize();
 		}
 	}
-	device = "AMD:GPU:" + deviceName;
+	device = ":GPU:" + deviceName;
 }
 
 
@@ -309,11 +341,8 @@ CV_EXPORTS_W bool oclInitialize() {
 		snprintf(value, sizeof(value), "OPENCV_OPENCL_DEVICE=%s", device.c_str());
 		putenv(value);
 	}
-
-	//size_t oclMemLimit = (1UL << 31);
-	//size_t maxMemSize = ocl::Device::getDefault().globalMemSize();
-	//size_t bufferPoolSize = maxMemSize > oclMemLimit ? (oclMemLimit >> 20) : (maxMemSize >> 20);
-
+	
+	/* @deprecated
 	size_t bufferPoolSize = ocl::Device::getDefault().globalMemSize() >> 20;
 	if (!getenv("OPENCV_OPENCL_BUFFERPOOL_LIMIT")) {
 		snprintf(value, sizeof(value), "OPENCV_OPENCL_BUFFERPOOL_LIMIT=%luMB", bufferPoolSize);
@@ -327,16 +356,18 @@ CV_EXPORTS_W bool oclInitialize() {
 		snprintf(value, sizeof(value), "OPENCV_OPENCL_SVM_BUFFERPOOL_LIMIT=%luMB", bufferPoolSize);
 		putenv(value);
 	}
+	*/
+	size_t maxBufferPoolSize = ocl::Device::getDefault().globalMemSize();
+	setBufferPoolSize(maxBufferPoolSize);
 
 	if (ocl::haveOpenCL()) {
 		ocl::setUseOpenCL(true);
 		if (ocl::haveSVM()) {
-			ocl::Context::getDefault().setUseSVM(true);
+			ocl::Context::getDefault().useSVM();
 		}
 	}
 	if (ocl::useOpenCL()) {
 		oclInitGammaLUT();
-        RenderContext::instance().startThreads();
         return true;
     }
     return false;
@@ -347,6 +378,7 @@ CV_EXPORTS_W void oclRelease() {
 	context.stopThreads();
 	context.release();
 	oclReleaseGammaLUT();
+	releaseBufferPool();
 }
 
 

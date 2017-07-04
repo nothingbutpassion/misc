@@ -46,17 +46,24 @@ CV_EXPORTS_W void oclProjection(
 	const vector<UMat>& ymap,
 	vector<UMat>& dstImages) {
 
+
 	vector<UMat> outImages(srcImages.size());
+	if (dstImages.size() != srcImages.size()) {
+		dstImages = outImages;
+	}
+
 	for (int i = 0; i < srcImages.size(); ++i) {
-		UMat dstImage;
-		oclCubicRemap(srcImages[i], dstImage, xmap[i], ymap[i]);
 		if (srcImages[i].type() == CV_8UC3) {
-			cvtColor(dstImage, outImages[i], COLOR_BGR2BGRA);
+			UMat dstImage;
+			oclCubicRemap(srcImages[i], dstImage, xmap[i], ymap[i]);
+			cvtColor(dstImage, dstImages[i], COLOR_BGR2BGRA);
+			//UMat tmp;
+			//cvtColor(srcImages[i],  tmp, COLOR_BGR2BGRA);
+			//oclCubicRemap(tmp, dstImages[i], xmap[i], ymap[i]);
 		} else {
-			outImages[i] = dstImage;
+			oclCubicRemap(srcImages[i], dstImages[i], xmap[i], ymap[i]);
 		}
 	}
-	dstImages = outImages;
 }
 
 
@@ -83,8 +90,7 @@ CV_EXPORTS_W void oclSharpImage(UMat& sphericalImage, float factor) {
 		UMat blured;
 		oclGaussianBlur(sphericalImage, blured, Size(3, 3), 3);
 		UMat combined;
-		cv::addWeighted(sphericalImage, 1 + factor, blured, -1 * factor, 0, combined);
-		sphericalImage = combined;
+		cv::addWeighted(sphericalImage, 1 + factor, blured, -1 * factor, 0, sphericalImage);
 	}
 }
 
@@ -97,13 +103,12 @@ CV_EXPORTS_W void oclStackHorizontal(const std::vector<UMat>& srcImages, UMat& d
 	}
 
 	int cols = 0;
-	UMat dst(srcImages[0].rows, totalCols, srcImages[0].type());
+	dstImage.create(srcImages[0].rows, totalCols, srcImages[0].type());
 	for (size_t i = 0; i < srcImages.size(); i++) {
-		UMat dpart = dst(Rect(cols, 0, srcImages[i].cols, srcImages[i].rows));
+		UMat dpart = dstImage(Rect(cols, 0, srcImages[i].cols, srcImages[i].rows));
 		srcImages[i].copyTo(dpart);
 		cols += srcImages[i].cols;
 	}
-	dstImage = dst;
 }
 
 
@@ -119,16 +124,13 @@ CV_EXPORTS_W void oclOffsetHorizontalWrap(const UMat& srcImage, float offset, UM
 	k.run(2, globalsize, localsize, false);
 
 	// remap
-	UMat warpedImage;
 	remap(
 		srcImage,
-		warpedImage,
+		dstImage,
 		warpMat,
 		UMat(),
 		INTER_NEAREST,
 		BORDER_WRAP);
-
-	dstImage = warpedImage;
 }
 
 
@@ -147,11 +149,6 @@ CV_EXPORTS_W void oclRemoveChunkLines(vector<UMat>& chunks) {
 		olcRemoveChunkLine(chunks[i]);
 	}
 }
-
-
-
-
-
 
 
 }	// namespace imvt

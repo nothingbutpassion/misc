@@ -181,6 +181,7 @@ void adjustImagesToStandardUsingMul(int standardSeq, vector<UMat>& images, vecto
 
 struct GammaLUT {
 	static GammaLUT& instance() {
+
 		static GammaLUT gammaLUT;
 		return gammaLUT;
 	}

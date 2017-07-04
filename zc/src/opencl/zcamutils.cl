@@ -90,7 +90,6 @@ __kernel void remove_chunk_line(
 	if (y < chunk_rows) {
 		wmat8uc4(chunk, chunk_cols - 1, y) = rmat8uc4(chunk, chunk_cols - 2, y);
 	}
-	
 }
 
 

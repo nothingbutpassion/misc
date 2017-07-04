@@ -33,6 +33,13 @@ CV_EXPORTS_W UMat oclCombineLazyNovelViews(
 	const UMat& imageR,
 	const UMat& flowLtoR,
 	const UMat& flowRtoL);
+CV_EXPORTS_W void oclCombineNovelViews(
+	const UMat& warp,
+	const UMat& imageL,
+	const UMat& imageR,
+	const UMat& flowLtoR,
+	const UMat& flowRtoL,
+	UMat& combined);
 }	// namespace imvt
 }	// namespace ocl
 }	// namespace cv
