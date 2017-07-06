@@ -18,7 +18,9 @@ CV_EXPORTS_W  UMat oclGammaLUT() {
 	for (int i = 0; i < 65536; i++) {
 		lut_gamma.at<ushort>(0, i) = pow((float)(i / 65536.0), 2.2) * 65536.0; 
 	}
-	return lut_gamma.getUMat(ACCESS_READ);
+	UMat result;
+	lut_gamma.copyTo(result);
+	return result;
 }
 
 CV_EXPORTS_W UMat oclAntiGammaLUT() {
@@ -26,7 +28,9 @@ CV_EXPORTS_W UMat oclAntiGammaLUT() {
 	for (int i = 0; i < 65536; i++) {
 		lut_anti_gamma.at<ushort>(0, i) = pow((float)(i / 65536.0), 1 / 2.2) * 65536.0;
 	}
-	return lut_anti_gamma.getUMat(ACCESS_READ);
+	UMat result;
+	lut_anti_gamma.copyTo(result);
+	return result;
 }
 
 CV_EXPORTS_W void oclAntiGammaAdjust(const UMat& lut_anti_gamma, UMat& image) {
@@ -49,17 +53,14 @@ CV_EXPORTS_W void oclGammaAdjust(const UMat& lut_gamma, UMat& image) {
 	k.run(2, globalsize, localsize, false);
 }
 
-CV_EXPORTS_W UMat oclAddBrightnessAndClampMulti(const UMat& image, const float value) {
+CV_EXPORTS_W void oclAddBrightnessAndClampMulti(UMat& image, const float value) {
 	CV_Assert(image.type() == CV_16UC4);
-	UMat adjustedImage(image.size(), CV_16UC4);
 	ocl::Kernel k("add_brightness_and_clamp_multi", ocl::oclrenderpano::coloradjust_oclsrc);
-	k.args(ocl::KernelArg::ReadOnlyNoSize(image),
-		ocl::KernelArg::WriteOnly(adjustedImage),
+	k.args(ocl::KernelArg::ReadWrite(image),
 		ocl::KernelArg::Constant(&value, sizeof(value)));
-	size_t globalsize[] = { adjustedImage.cols, adjustedImage.rows };
+	size_t globalsize[] = { image.cols, image.rows };
 	size_t localsize[] = { 16, 16 };
 	k.run(2, globalsize, localsize, false);
-	return adjustedImage;
 }
 
 
@@ -131,7 +132,7 @@ float calcBrightnessRatioByGrid(UMat L, UMat R, float& average, int type = 0) {
 	return ratio;
 }
 
-void adjustImagesToStandardUsingMul(int standardSeq, vector<UMat>& images, vector<UMat>& adjusted, 
+void adjustImagesToStandardUsingMul(int standardSeq, vector<UMat>& images, 
 	vector<double>& colorP, vector<double>& adjustColor, int type, bool debug) {
 
 	int standard = 0;
@@ -168,10 +169,11 @@ void adjustImagesToStandardUsingMul(int standardSeq, vector<UMat>& images, vecto
 			printf("adjustImagesToStandardUsingMul  %d %f \n", i, adjustColor[i]);
 		}
 		if (adjustColor[i] != 1.0) {
-			adjusted[i] = oclAddBrightnessAndClampMulti(images[i], adjustColor[i]);
+			//adjusted[i] = oclAddBrightnessAndClampMulti(images[i], adjustColor[i]);
+			oclAddBrightnessAndClampMulti(images[i], adjustColor[i]);
 		}
 		else {
-			adjusted[i] = images[i];
+			// adjusted[i] = images[i];
 		}
 	}
 }
@@ -252,7 +254,7 @@ CV_EXPORTS_W bool oclPreColorAdjustByGamma(
 	UMat lut_anti_gamma = GammaLUT::instance().antiGammaTable();
 	for (int i = 0; i < numCams; i++) {
 		spheres[i].convertTo(gammaMats[i], CV_16UC4);
-		gammaMats[i] = gammaMats[i].mul(256);
+		multiply(gammaMats[i], 256, gammaMats[i]);
 		oclAntiGammaAdjust(lut_anti_gamma, gammaMats[i]);
 	}
 
@@ -302,17 +304,17 @@ CV_EXPORTS_W bool oclPreColorAdjustByGamma(
 
 	// adjust image using muliple method
 	if (!is_hdr) {
-		adjustImagesToStandardUsingMul(standard, gammaMats, gammaMats, colorP, adjustColor, 0, save_debug);
+		adjustImagesToStandardUsingMul(standard, gammaMats, colorP, adjustColor, 0, save_debug);
 	}
 	else {
-		adjustImagesToStandardUsingMul(-1, gammaMats, gammaMats, colorP, adjustColor, 0, save_debug);
+		adjustImagesToStandardUsingMul(-1, gammaMats, colorP, adjustColor, 0, save_debug);
 	}
 
 	// apply anti-gamma adjust
 	UMat lut_gamma = GammaLUT::instance().gammaTable();
 	for (int i = 0; i < numCams; i++) {
 		oclGammaAdjust(lut_gamma, gammaMats[i]);
-		gammaMats[i] = gammaMats[i].mul(1.0 / 256);
+		multiply(gammaMats[i], 1.0/256, gammaMats[i]);
 		gammaMats[i].convertTo(spheres[i], CV_8UC4);
 	}
 	return true;

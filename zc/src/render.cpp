@@ -22,8 +22,11 @@
 #include "opencv2/oclrenderpano/ocl_novelview.hpp"
 #include "opencv2/oclrenderpano/ocl_coloradjust.hpp"
 
+#if 0
 #define LOGD printf
-//#define LOGD(...)
+#else
+#define LOGD(...)
+#endif
 
 namespace cv {
 namespace ocl {
@@ -192,8 +195,8 @@ struct RenderContext {
 			// save previous images/flows
 			c->preImageLs[t.index] = t.imageL->clone();
 			c->preImageRs[t.index] = t.imageR->clone();
-			c->preFlowLtoRs[t.index] = flowLtoR.clone();
-			c->preFlowRtoLs[t.index] = flowRtoL.clone();
+			c->preFlowLtoRs[t.index] = flowLtoR;
+			c->preFlowRtoLs[t.index] = flowRtoL;
 
 			// wait for opencl completed
 			ocl::Queue::getDefault().finish();
@@ -208,16 +211,64 @@ struct RenderContext {
 		LOGD("render thread %u is exited\n", this_thread::get_id());
 	}
 
+
+	void renderChunk(int index, const UMat& imageL, const UMat& imageR,  UMat& chunk, float motionThreshold) {
+
+		// compute optical flows
+		UMat flowLtoR;
+		UMat flowRtoL;
+		oclComputeOpticalFlow(
+			imageL,
+			imageR,
+			preFlowLtoRs[index],
+			preImageLs[index],
+			preImageRs[index],
+			flowLtoR,
+			DirectionHint::LEFT,
+			motionThreshold);
+		oclComputeOpticalFlow(
+			imageR,
+			imageL,
+			preFlowRtoLs[index],
+			preImageRs[index],
+			preImageLs[index],
+			flowRtoL,
+			DirectionHint::RIGHT,
+			motionThreshold);
+
+		// combine novel views
+		oclCombineNovelViews(
+			warps[index],
+			imageL,
+			imageR,
+			flowLtoR,
+			flowRtoL,
+			chunk);
+
+		// save previous images/flows
+		preImageLs[index] = imageL.clone();
+		preImageRs[index] = imageR.clone();
+		preFlowLtoRs[index] = flowLtoR;
+		preFlowRtoLs[index] = flowRtoL;
+	}
+
+
 	void renderChunks(const vector<UMat>& imgLs, const vector<UMat>& imgRs, vector<UMat>& chunks, float motionThreshold) {
-		// no render threads
-		if (threads.size() == 0) {
-			return;
-		}
 
 		// put render tasks to input queue
 		if (chunks.size() != imgLs.size()) {
 			chunks.assign(imgLs.size(), UMat());
 		}
+
+		// no render threads
+		if (threads.size() == 0) {
+			for (int index = 0; index < imgLs.size(); ++index) {
+				renderChunk(index, imgLs[index], imgRs[index], chunks[index], motionThreshold);
+				ocl::finish();
+			}
+			return;
+		}
+
 		for (int index = 0; index < imgLs.size(); ++index) {
 			RenderTask task = { index, &imgLs[index], &imgRs[index], &chunks[index], motionThreshold };
 			inQueue.enqueue(task);
@@ -230,6 +281,20 @@ struct RenderContext {
 		}
 	}
 };
+
+// @fixme: this is only a "rough estimate", should be refined after experiments.  
+static size_t calcThreadCount(const vector<UMat>& images) {
+	size_t bufferPoolSize = ocl::Device::getDefault().globalMemSize() >> 20;
+	size_t imageSize = (images[0].cols * images[0].rows * images[0].channels() * images.size()) >> 20;
+	size_t ration = bufferPoolSize / imageSize;
+	if (ration > 128) {
+		return 4;
+	}
+	if (ration > 64) {
+		return 2;
+	}
+	return 1;
+}
 
 
 static void setBufferPoolSize(size_t size) {
@@ -273,7 +338,10 @@ CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 	RenderContext& context = RenderContext::instance();
 	if (!context.isInit()) {
 		context.init(imageLs);
-		context.startThreads();
+		int numThreads = calcThreadCount(imageLs);
+		if (numThreads > 1) {
+			context.startThreads(numThreads);
+		}
 	}
 	context.renderChunks(imageLs, imageRs, chunks, motionThreshold);
 }
