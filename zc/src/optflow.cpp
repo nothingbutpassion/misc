@@ -454,40 +454,42 @@ struct OpticalFlow {
 		}
 
 		// pre-scale everything to a smaller size. this should be faster + more stable
+		/* @deleted
 		UMat rgba0byteDownscaled, rgba1byteDownscaled, prevFlowDownscaled;
 		UMat prevI0BGRADownscaled, prevI1BGRADownscaled;
 		cv::Size originalSize = rgba0byte.size();
 		cv::Size downscaleSize(rgba0byte.cols * kDownscaleFactor, rgba0byte.rows * kDownscaleFactor);
-        /* @deleted
-        resize(rgba0byte, rgba0byteDownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
+		resize(rgba0byte, rgba0byteDownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
 		resize(rgba1byte, rgba1byteDownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
-        */
-        oclResize(rgba0byte, rgba0byteDownscaled, downscaleSize);
+		*/
+		UMat rgba0byteDownscaled, rgba1byteDownscaled;
+		UMat prevFlowDownscaled, prevI1BGRADownscaled;
+		cv::Size originalSize = rgba0byte.size();
+		cv::Size downscaleSize(rgba0byte.cols * kDownscaleFactor, rgba0byte.rows * kDownscaleFactor);
+		oclResize(rgba0byte, rgba0byteDownscaled, downscaleSize);
 		oclResize(rgba1byte, rgba1byteDownscaled, downscaleSize);
 
-
-
-        /* @deleted
+		/* @deleted
 		UMat motion(downscaleSize, CV_32F);
-        */
-        UMat motion;
+		*/
+		UMat motion;
 		if (prevFlow.dims > 0) {
 			usePrevFlowTemporalRegularization = true;
-			
-            /* @deleted
-			resize(prevFlow, prevFlowDownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC); 
+
+			/* @deleted
+			resize(prevFlow, prevFlowDownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
 			prevFlowDownscaled *= float(prevFlowDownscaled.rows) / float(prevFlow.rows);
-            resize(prevI0BGRA, prevI0BGRADownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
+			resize(prevI0BGRA, prevI0BGRADownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
 			resize(prevI1BGRA, prevI1BGRADownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
 			*/
-            oclResize(prevFlow, prevFlowDownscaled, downscaleSize);
-            oclScale(prevFlowDownscaled, float(prevFlowDownscaled.rows)/float(prevFlow.rows)); 
-            // oclResize(prevI0BGRA, prevI0BGRADownscaled, downscaleSize);
-            oclResize(prevI1BGRA, prevI1BGRADownscaled, downscaleSize);
+			oclResize(prevFlow, prevFlowDownscaled, downscaleSize);
+			oclScale(prevFlowDownscaled, float(prevFlowDownscaled.rows) / float(prevFlow.rows));
+			// oclResize(prevI0BGRA, prevI0BGRADownscaled, downscaleSize);
+			oclResize(prevI1BGRA, prevI1BGRADownscaled, downscaleSize);
 
-            // @added
-            motion.create(downscaleSize, CV_32F);
-           
+			// @added
+			motion.create(downscaleSize, CV_32F);
+
 			// do motion detection vs. previous frame's images
 			/* @deleted
 			for (int y = 0; y < rgba0byteDownscaled.rows; ++y) {
@@ -500,18 +502,21 @@ struct OpticalFlow {
 			}
 			*/
 			oclMotionDetectionV2(rgba1byteDownscaled, prevI1BGRADownscaled, motion);
+			/* @optimized */
+			prevI1BGRADownscaled = UMat();
 		}
 
 		// convert to various color spaces
 		UMat I0Grey, I1Grey, I0, I1, alpha0, alpha1;
-		vector<UMat> channels0, channels1;
-		split(rgba0byteDownscaled, channels0);
-		split(rgba1byteDownscaled, channels1);
 		cvtColor(rgba0byteDownscaled, I0Grey, CV_BGRA2GRAY);
 		cvtColor(rgba1byteDownscaled, I1Grey, CV_BGRA2GRAY);
-        
 		I0Grey.convertTo(I0, CV_32F);
 		I1Grey.convertTo(I1, CV_32F);
+
+		/* @optimized */
+		I0Grey = UMat();
+		I1Grey = UMat();
+
 		/* @deleted
 		I0 /= 255.0f;
 		I1 /= 255.0f;
@@ -519,8 +524,18 @@ struct OpticalFlow {
         oclScale(I0, 1.0f/255.0f);
         oclScale(I1, 1.0f/255.0f);
   
+		vector<UMat> channels0, channels1;
+		split(rgba0byteDownscaled, channels0);
+		split(rgba1byteDownscaled, channels1);
 		channels0[3].convertTo(alpha0, CV_32F);
 		channels1[3].convertTo(alpha1, CV_32F);
+
+		/* @optimized */
+		rgba0byteDownscaled = UMat();
+		rgba1byteDownscaled = UMat();
+		channels0.clear();
+		channels1.clear();
+
 		/* @deleted
 		alpha0 /= 255.0f;
 		alpha1 /= 255.0f;
@@ -531,17 +546,9 @@ struct OpticalFlow {
         /* @deleted
 		GaussianBlur(I0, I0, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
 		GaussianBlur(I1, I1, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
-        {
-        UMat I0Tmp, I1Tmp;
-        oclGaussianBlur(I0, I0Tmp, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
-    	oclGaussianBlur(I1, I1Tmp, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
-    	I0 = I0Tmp;
-        I1 = I1Tmp;
-        }
 		*/
 		oclGaussianBlur(I0, I0, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
 		oclGaussianBlur(I1, I1, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
-
 
 		vector<UMat> pyramidI0 = buildPyramid(I0);
 		vector<UMat> pyramidI1 = buildPyramid(I1);
@@ -622,16 +629,6 @@ struct OpticalFlow {
 			flow,
 			Size(kFinalFlowBlurKernelWidth, kFinalFlowBlurKernelWidth),
 			kFinalFlowBlurSigma);
-		
-        {
-        UMat flowTmp;
-        oclGaussianBlur(
-    		flow,
-			flowTmp,
-    		Size(kFinalFlowBlurKernelWidth, kFinalFlowBlurKernelWidth),
-    		kFinalFlowBlurSigma);
-        flow = flowTmp;
-        }
 		*/
 		oclGaussianBlur(
 			flow,
@@ -663,7 +660,7 @@ struct OpticalFlow {
 		UMat& flow,
 		DirectionHint hint) {
 
-
+		/* @moved */
 		if (flow.empty()) {
 			// initialize to all zeros
 			flow = UMat::zeros(I0.size(), CV_32FC2);
@@ -700,25 +697,12 @@ struct OpticalFlow {
 		GaussianBlur(I1x, I1x, kGradientBlurSize, kGradientBlurSigma);
 		GaussianBlur(I1y, I1y, kGradientBlurSize, kGradientBlurSigma);
 		*/
-		/*
-        {
-		UMat I0xTmp, I0yTmp, I1xTmp, I1yTmp;
-		oclGaussianBlur(I0x, I0xTmp, kGradientBlurSize, kGradientBlurSigma);
-		oclGaussianBlur(I0y, I0yTmp, kGradientBlurSize, kGradientBlurSigma);
-		oclGaussianBlur(I1x, I1xTmp, kGradientBlurSize, kGradientBlurSigma);
-		oclGaussianBlur(I1y, I1yTmp, kGradientBlurSize, kGradientBlurSigma);
-        I0x = I0xTmp;
-        I0y = I0yTmp;
-        I1x = I1xTmp;
-        I1y = I1yTmp;
-        }
-		*/
 		oclGaussianBlur(I0x, I0x, kGradientBlurSize, kGradientBlurSigma);
 		oclGaussianBlur(I0y, I0y, kGradientBlurSize, kGradientBlurSigma);
 		oclGaussianBlur(I1x, I1x, kGradientBlurSize, kGradientBlurSigma);
 		oclGaussianBlur(I1y, I1y, kGradientBlurSize, kGradientBlurSigma);
 
-		/* @moved
+		/* @
 		if (flow.empty()) {
 			// initialize to all zeros
 			flow = UMat::zeros(I0.size(), CV_32FC2);
