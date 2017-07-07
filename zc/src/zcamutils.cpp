@@ -89,7 +89,6 @@ CV_EXPORTS_W void oclSharpImage(UMat& sphericalImage, float factor) {
 	if (factor != 0.0) {
 		UMat blured;
 		oclGaussianBlur(sphericalImage, blured, Size(3, 3), 3);
-		UMat combined;
 		cv::addWeighted(sphericalImage, 1 + factor, blured, -1 * factor, 0, sphericalImage);
 	}
 }

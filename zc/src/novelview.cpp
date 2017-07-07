@@ -213,6 +213,7 @@ struct OCLNovelViewGeneratorLazyFlow {
 		UMat remappedFlow;
 		oclRemap(opticalFlow, remappedFlow, warpOpticalFlow);
 
+
 		/* @deleted
 		Mat warpComposition = Mat(Size(width, height), CV_32FC2);
 		for (int y = 0; y < height; ++y) {
@@ -228,7 +229,8 @@ struct OCLNovelViewGeneratorLazyFlow {
 		Mat novelView;
 		remap(srcImage, novelView, warpComposition, Mat(), CV_INTER_CUBIC);
 		*/
-		UMat warpComposition(novelViewWarpBuffer.size(), CV_32FC2);
+		//UMat warpComposition(novelViewWarpBuffer.size(), CV_32FC2);
+		UMat warpComposition = warpOpticalFlow;
 		oclGetWarpComposition(novelViewWarpBuffer, remappedFlow, warpComposition, invertT ? 1 : 0);
 		UMat novelView;
 		oclRemap(srcImage, novelView, warpComposition);

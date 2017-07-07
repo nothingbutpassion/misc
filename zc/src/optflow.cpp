@@ -449,7 +449,7 @@ struct OpticalFlow {
 		CV_Assert(prevFlow.dims == 0 || prevFlow.size() == rgba0byte.size());
 
 		// @added
-		if (rgba0byte.cols < 500) {
+		if (rgba0byte.cols < 400) {
 			useSlashSweeping = true;
 		}
 
@@ -531,7 +531,6 @@ struct OpticalFlow {
         /* @deleted
 		GaussianBlur(I0, I0, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
 		GaussianBlur(I1, I1, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
-		*/
         {
         UMat I0Tmp, I1Tmp;
         oclGaussianBlur(I0, I0Tmp, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
@@ -539,6 +538,10 @@ struct OpticalFlow {
     	I0 = I0Tmp;
         I1 = I1Tmp;
         }
+		*/
+		oclGaussianBlur(I0, I0, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
+		oclGaussianBlur(I1, I1, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
+
 
 		vector<UMat> pyramidI0 = buildPyramid(I0);
 		vector<UMat> pyramidI1 = buildPyramid(I1);
@@ -600,12 +603,6 @@ struct OpticalFlow {
                 
 				oclScale(flow, 1.0f/kPyrScaleFactor);
 			}
-
-			/* @optimized */
-			pyramidI0[level] = UMat();
-			pyramidI1[level] = UMat();
-			pyramidAlpha0[level] = UMat();
-			pyramidAlpha1[level] = UMat();
 		}
 		
 		// scale the flow result back to full size
@@ -625,7 +622,7 @@ struct OpticalFlow {
 			flow,
 			Size(kFinalFlowBlurKernelWidth, kFinalFlowBlurKernelWidth),
 			kFinalFlowBlurSigma);
-		*/
+		
         {
         UMat flowTmp;
         oclGaussianBlur(
@@ -635,6 +632,12 @@ struct OpticalFlow {
     		kFinalFlowBlurSigma);
         flow = flowTmp;
         }
+		*/
+		oclGaussianBlur(
+			flow,
+			flow,
+			Size(kFinalFlowBlurKernelWidth, kFinalFlowBlurKernelWidth),
+			kFinalFlowBlurSigma);
 	}
 
     vector<UMat> buildPyramid(const UMat& src) {
@@ -653,12 +656,22 @@ struct OpticalFlow {
 
     // patch_index is used only for testing 
 	void patchMatchPropagationAndSearch(
-		const UMat& I0,
-		const UMat& I1,
-		const UMat& alpha0,
-		const UMat& alpha1,
+		UMat& I0,
+		UMat& I1,
+		UMat& alpha0,
+		UMat& alpha1,
 		UMat& flow,
 		DirectionHint hint) {
+
+
+		if (flow.empty()) {
+			// initialize to all zeros
+			flow = UMat::zeros(I0.size(), CV_32FC2);
+			// optionally look for a better flow
+			if (kMaxPercentage > 0 && hint != DirectionHint::UNKNOWN) {
+				adjustInitialFlow(I0, I1, alpha0, alpha1, flow, hint);
+			}
+		}
 
 		// image gradients
 		UMat I0x, I0y, I1x, I1y;
@@ -671,9 +684,13 @@ struct OpticalFlow {
 		Sobel(I1, I1y, kSameDepth, 0, 1, kKernelSize, 1, 0.0f, BORDER_REPLICATE);
 		*/
 		oclSobleX(I0, I0x);
-		oclSobleX(I0, I0y);
+		oclSobleY(I0, I0y);
 		oclSobleX(I1, I1x);
-		oclSobleX(I1, I1y);
+		oclSobleY(I1, I1y);
+
+		/* @optimized */
+		I0 = UMat();
+		I1 = UMat();
 
 		// blur gradients
 		const cv::Size kGradientBlurSize(kGradientBlurKernelWidth, kGradientBlurKernelWidth);
@@ -683,6 +700,7 @@ struct OpticalFlow {
 		GaussianBlur(I1x, I1x, kGradientBlurSize, kGradientBlurSigma);
 		GaussianBlur(I1y, I1y, kGradientBlurSize, kGradientBlurSigma);
 		*/
+		/*
         {
 		UMat I0xTmp, I0yTmp, I1xTmp, I1yTmp;
 		oclGaussianBlur(I0x, I0xTmp, kGradientBlurSize, kGradientBlurSigma);
@@ -694,7 +712,13 @@ struct OpticalFlow {
         I1x = I1xTmp;
         I1y = I1yTmp;
         }
-		
+		*/
+		oclGaussianBlur(I0x, I0x, kGradientBlurSize, kGradientBlurSigma);
+		oclGaussianBlur(I0y, I0y, kGradientBlurSize, kGradientBlurSigma);
+		oclGaussianBlur(I1x, I1x, kGradientBlurSize, kGradientBlurSigma);
+		oclGaussianBlur(I1y, I1y, kGradientBlurSize, kGradientBlurSigma);
+
+		/* @moved
 		if (flow.empty()) {
 			// initialize to all zeros
 			flow = UMat::zeros(I0.size(), CV_32FC2);
@@ -703,6 +727,7 @@ struct OpticalFlow {
 				adjustInitialFlow(I0, I1, alpha0, alpha1, flow, hint);
 			}
 		}
+		*/
         
 		// blur flow. we will regularize against this
 		UMat blurredFlow;
@@ -773,6 +798,10 @@ struct OpticalFlow {
         }
         
 		lowAlphaFlowDiffusion(alpha0, alpha1, flow);
+
+		/* @optimized */
+		alpha0 = UMat();
+		alpha1 = UMat();
 	}
 
     void adjustInitialFlow(
