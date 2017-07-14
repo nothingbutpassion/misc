@@ -1,8 +1,13 @@
 /**
  * @brief the following macros are used for accessing img(x, y)
  */
+/* @deprecated 
 #define rmat32fc1(addr, x, y) ((__global const float*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define wmat32fc1(addr, x, y) ((__global float*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+*/
+#define rmat32fc1(addr, x, y)   ((__global const float*)(((__global const uchar*)addr) + mad24(addr##_step, (y), addr##_offset)))[x]
+#define wmat32fc1(addr, x, y) 	((__global float*)(((__global uchar*)addr) + mad24(addr##_step, (y), addr##_offset)))[x]
+
 #define rmat(addr, x, y) 	rmat32fc1(addr, x, y)
 #define wmat(addr, x, y) 	wmat32fc1(addr, x, y)
 

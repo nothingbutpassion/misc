@@ -10,12 +10,12 @@ namespace imvt {
 
 
 /**
-* @brief Check whether there are (AMD GPU) OpenCL devices available
+* @brief Check whether there are proper OpenCL devices available.
 */
 CV_EXPORTS_W bool oclDeviceAvailable();
 
 /**
-* @brief Initialize OpenCL: check device avaliablity and alloc related resource
+* @brief Initialize OpenCL: check device avaliablity and alloc related resource.
 *
 * @return true if succeed, otherwise false.
 *
@@ -25,13 +25,13 @@ CV_EXPORTS_W bool oclInitialize();
 
 
 /**
-* @brief Release the resource allocated by oclInitialize()
+* @brief Release OpenCL-related resource
 */
 CV_EXPORTS_W void oclRelease();
 
 
 /**
-* @brief Remap each image contained in srcImages with specified x/y map
+* @brief Remap each image in srcImages with specified x/y map
 *
 * @param srcImages	the input images to be remaped, (type must be CV_8UC3 or CV_8UC4)
 * @param xmap		the x direction map (type must be CV_32FC1)
@@ -66,9 +66,8 @@ CV_EXPORTS_W bool oclPreColorAdjustByGamma(
 * @param chunks					return the generated panorama chunks.
 * @param motionThreshhold		the motion threshhold for computing the optical flow. 
 *
-* @note 1) This function will increase the reference count of imageLs[i] and imageRs[i] to reserve these images for next invokation.  
-*		   Call clearPreviousFrames() to clear these reserved frame buffers if necessary.
-*		2) The input chunks are not used (or ignored), and will be replaced with the output chunks. 
+* @note This function reserve the copy of imageLs[i]/imageRs[i] for next invokation.  
+*		You can call clearPreviousFrames() to clear these reserved frame buffers if necessary.
 */
 CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 	const std::vector<UMat>& imageLs,
@@ -78,7 +77,7 @@ CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 
 
 /**
-* @brief Clear the previous frame buffers that reserved by oclRenderStereoPanoramaChunks();
+* @brief Clear the previous frame buffers reserved by oclRenderStereoPanoramaChunks().
 */
 CV_EXPORTS_W void oclClearPreviousFrames();
 
@@ -96,7 +95,7 @@ CV_EXPORTS_W void oclStackHorizontal(
 
 
 /**
-* @brief Smooth pano with previous image and specified threshold.
+* @brief Smooth pano image with previous image and specified threshold.
 */
 CV_EXPORTS_W void oclSmoothImage(
 	UMat& pano,
@@ -111,17 +110,15 @@ CV_EXPORTS_W void oclSharpImage(
 	UMat& sphericalImage,
 	float factor);
 
-
 /**
-* @brief Remap srcImage with offset warp.
+* @brief Remap image with specified offset.
 */
 CV_EXPORTS_W void oclOffsetHorizontalWrap(
-	const UMat& srcImage,
-	float offset,
-	UMat& dstImage);
+	UMat& image,
+	float offset);
 
 /**
-* @brief Remove the chunk line for all chunks.
+* @brief Remove the chunk lines for input chunks.
 */
 CV_EXPORTS_W void oclRemoveChunkLines(std::vector<UMat>& chunks);
 

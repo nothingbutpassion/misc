@@ -193,8 +193,11 @@ struct RenderContext {
 				*(t.chunk));
 
 			// save previous images/flows
-			c->preImageLs[t.index] = t.imageL->clone();
-			c->preImageRs[t.index] = t.imageR->clone();
+			//c->preImageLs[t.index] = t.imageL->clone();
+			//c->preImageRs[t.index] = t.imageR->clone();
+			t.imageL->copyTo(c->preImageLs[t.index]);
+			t.imageR->copyTo(c->preImageRs[t.index]);
+
 			c->preFlowLtoRs[t.index] = flowLtoR;
 			c->preFlowRtoLs[t.index] = flowRtoL;
 
@@ -246,8 +249,10 @@ struct RenderContext {
 			chunk);
 
 		// save previous images/flows
-		preImageLs[index] = imageL.clone();
-		preImageRs[index] = imageR.clone();
+		//preImageLs[index] = imageL.clone();
+		//preImageRs[index] = imageR.clone();
+		imageL.copyTo(preImageLs[index]);
+		imageR.copyTo(preImageRs[index]);
 		preFlowLtoRs[index] = flowLtoR;
 		preFlowRtoLs[index] = flowRtoL;
 	}

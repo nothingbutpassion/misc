@@ -133,6 +133,11 @@ CV_EXPORTS_W void oclOffsetHorizontalWrap(const UMat& srcImage, float offset, UM
 }
 
 
+CV_EXPORTS_W void oclOffsetHorizontalWrap(UMat& image, float offset) {
+	UMat dst;
+	oclOffsetHorizontalWrap(image, offset, dst);
+	image = dst;
+}
 
 static void olcRemoveChunkLine(UMat& chunk) {
 	CV_Assert(chunk.type() == CV_8UC4);

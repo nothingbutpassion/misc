@@ -1,10 +1,17 @@
 /**
  * @brief the following macros are used for accessing img(x, y)
  */
+
+/* @deprecated
 #define rmat16uc1(addr, x, y) ((__global const ushort*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
 #define rmat16uc4(addr, x, y) ((__global const ushort4*)(((__global const uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-#define wmat16uc1(addr, x, y) ((__global ushort*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
-#define wmat16uc4(addr, x, y) ((__global ushort4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat16uc1(addr, x, y) 	((__global ushort*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+#define wmat16uc4(addr, x, y) 	((__global ushort4*)(((__global uchar*)addr) + addr##_offset + (y)*addr##_step))[x]
+*/
+#define rmat16uc1(addr, x, y)   ((__global const ushort*)(((__global const uchar*)addr) + mad24(addr##_step, (y), addr##_offset)))[x]
+#define rmat16uc4(addr, x, y) 	((__global const ushort4*)(((__global const uchar*)addr) + mad24(addr##_step, (y), addr##_offset)))[x]
+#define wmat16uc1(addr, x, y) 	((__global ushort*)(((__global uchar*)addr) + mad24(addr##_step, (y), addr##_offset)))[x]
+#define wmat16uc4(addr, x, y) 	((__global ushort4*)(((__global uchar*)addr) + mad24(addr##_step, (y), addr##_offset)))[x]
 
 
 __kernel void anti_gamma_lut_adjust(
