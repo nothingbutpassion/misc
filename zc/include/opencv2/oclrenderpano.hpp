@@ -15,13 +15,28 @@ namespace imvt {
 CV_EXPORTS_W bool oclDeviceAvailable();
 
 /**
+* @brief The parameters used for initializing OpenCL.
+*/
+struct OclInitParameters {
+	  bool isStereo = false;
+	  float vergeAtInfinitySlabDisplacement = 0.0f;
+	  int numCams =-1;
+	  int numNovelViews = -1;
+	  Size opticalSize = Size{-1, -1};
+};
+
+
+/**
 * @brief Initialize OpenCL: check device avaliablity and alloc related resource.
+*
+* 
+* @parma initParams	the parameters used for initializing OpenCL.
 *
 * @return true if succeed, otherwise false.
 *
 * @note This function must be called before any UMat operations.
 */
-CV_EXPORTS_W bool oclInitialize();
+CV_EXPORTS_W bool oclInitialize(const OclInitParameters* initParams = nullptr);
 
 
 /**

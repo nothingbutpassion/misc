@@ -304,11 +304,53 @@ struct OCLNovelViewGeneratorLazyFlow {
 		return make_pair(leftEyeCombined, rightEyeCombined);
 	}
 
-	/**
-	 * @added
-	 * @note: This function is the special version of the above one when warp == lazyBuffer.warpL == lazyBuffer.warpR.
-	 *        So, the return value == leftEyeCombined == rightEyeCombined.
-	 */ 
+
+	void combineLazyNovelViews(
+		const OCLLazyNovelViewBuffer& lazyBuffer, UMat& leftEyeCombined, UMat& rightEyeCombined) {
+
+		// two images for the left eye (to be combined)
+		pair<UMat, UMat> leftEyeFromLeft = renderLazyNovelView(
+			lazyBuffer.warpL,
+			imageL,
+			flowRtoL,
+			false);
+
+		pair<UMat, UMat> leftEyeFromRight = renderLazyNovelView(
+			lazyBuffer.warpL,
+			imageR,
+			flowLtoR,
+			true);
+
+		// two images for the right eye (to be combined)
+		pair<UMat, UMat> rightEyeFromLeft = renderLazyNovelView(
+			lazyBuffer.warpR,
+			imageL,
+			flowRtoL,
+			false);
+		pair<UMat, UMat> rightEyeFromRight = renderLazyNovelView(
+			lazyBuffer.warpR,
+			imageR,
+			flowLtoR,
+			true);
+
+		leftEyeCombined.create(leftEyeFromLeft.first.size(), CV_8UC4);
+		oclCombineLazyViews(
+			leftEyeFromLeft.first,
+			leftEyeFromRight.first,
+			leftEyeFromLeft.second,
+			leftEyeFromRight.second,
+			leftEyeCombined);
+		rightEyeCombined.create(rightEyeFromLeft.first.size(), CV_8UC4);
+		oclCombineLazyViews(
+			rightEyeFromLeft.first,
+			rightEyeFromRight.first,
+			rightEyeFromLeft.second,
+			rightEyeFromRight.second,
+			rightEyeCombined);
+	}
+
+
+
 	UMat combineLazyNovelViews(const UMat& warp) {
 		pair<UMat, UMat> leftEyeFromLeft = renderLazyNovelView(
 			warp,
@@ -332,7 +374,6 @@ struct OCLNovelViewGeneratorLazyFlow {
 
 		return leftEyeCombined;
 	}
-
 
 	void combineLazyNovelViews(const UMat& warp, UMat& combined) {
 		pair<UMat, UMat> leftEyeFromLeft = renderLazyNovelView(
@@ -409,8 +450,31 @@ CV_EXPORTS_W void oclCombineNovelViews(
 	generatorLazyFlow.combineLazyNovelViews(warp, combined);
 }
 
+CV_EXPORTS_W void oclCombineNovelViews(
+	const UMat& warpL,
+	const UMat& warpR,
+	const UMat& imageL,
+	const UMat& imageR,
+	const UMat& flowLtoR,
+	const UMat& flowRtoL,
+	UMat& leftEyeCombined,
+	UMat& rightEyeCombined) {
 
-} // imvt
+	OCLLazyNovelViewBuffer lazyBuffer;
+	lazyBuffer.warpL = warpL;
+	lazyBuffer.warpR = warpR;
+
+	OCLNovelViewGeneratorLazyFlow generatorLazyFlow;
+	generatorLazyFlow.imageL = imageL;
+	generatorLazyFlow.imageR = imageR;
+	generatorLazyFlow.flowLtoR = flowLtoR;
+	generatorLazyFlow.flowRtoL = flowRtoL;
+	generatorLazyFlow.combineLazyNovelViews(lazyBuffer, leftEyeCombined, rightEyeCombined);
+}
+
+
+
+} // namespace imvt
 } // namespace ocl
 } // namespace cv
 
