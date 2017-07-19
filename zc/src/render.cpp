@@ -21,6 +21,7 @@
 #include "opencv2/oclrenderpano/ocl_optflow.hpp"
 #include "opencv2/oclrenderpano/ocl_novelview.hpp"
 #include "opencv2/oclrenderpano/ocl_coloradjust.hpp"
+#include "opencv2/oclrenderpano/ocl_buffer.hpp"
 #include "opencv2/oclrenderpano.hpp"
 
 #if 0
@@ -68,12 +69,13 @@ struct RenderTask {
     int index;
     const UMat* imageL;
     const UMat* imageR;
-    UMat* chunk;
+    UMat* chunkL;
+	UMat* chunkR;
     float motionThreshold;
 };
 
 
-// @fixme: this is only a "rough estimate", should be refined after experiments.  
+// @deprecated This is only a "rough estimate", should be refined after experiments.  
 static size_t calcThreadCount(int numCams, Size imgSize) {
 	if (numCams > 4) {
 		numCams = 4;
@@ -92,6 +94,7 @@ static size_t calcThreadCount(int numCams, Size imgSize) {
 
 struct RenderContext {
 
+	// render tasks/threads
 	SafeQueue<RenderTask> inQueue;
 	SafeQueue<RenderTask> outQueue;
     vector<thread> threads;
@@ -104,7 +107,7 @@ struct RenderContext {
 
 	// for both stereo and mono
 	// NOTES: 
-	// optflowWidth == overlapWidth
+	// opticalFlowWidth == overlapWidth
 	// overlapWidth + numNovelViews == camImageWidth
 	int numCams = 0;
 	int camImageWidth = 0;
@@ -228,8 +231,7 @@ struct RenderContext {
 		preFlowRtoLs.assign(numCams, UMat());
 	}
 
-    void startThreads() {
-		int numThreads = calcThreadCount(numCams, Size(camImageWidth, camImageHeight));
+    void startThreads(int numThreads = 4) {
         for (int i=0; i < numThreads; i++) {
             threads.push_back(thread(renderChunkThread, this));
         }
@@ -289,20 +291,29 @@ struct RenderContext {
 				t.motionThreshold);
 
 			// combine novel views
-			oclCombineNovelViews(
-				c->warps[t.index],
-				*(t.imageL),
-				*(t.imageR),
-				flowLtoR,
-				flowRtoL,
-				*(t.chunk));
+			if (c->isStereo) {
+				oclCombineNovelViews(
+					c->warpLs[t.index],
+					c->warpRs[t.index],
+					*(t.imageL),
+					*(t.imageR),
+					flowLtoR,
+					flowRtoL,
+					*(t.chunkL),
+					*(t.chunkR));
+			} else {
+				oclCombineNovelViews(
+					c->warps[t.index],
+					*(t.imageL),
+					*(t.imageR),
+					flowLtoR,
+					flowRtoL,
+					*(t.chunkL));
+			}
 
 			// save previous images/flows
-			//c->preImageLs[t.index] = t.imageL->clone();
-			//c->preImageRs[t.index] = t.imageR->clone();
 			t.imageL->copyTo(c->preImageLs[t.index]);
 			t.imageR->copyTo(c->preImageRs[t.index]);
-
 			c->preFlowLtoRs[t.index] = flowLtoR;
 			c->preFlowRtoLs[t.index] = flowRtoL;
 
@@ -320,7 +331,7 @@ struct RenderContext {
 	}
 
 
-	void renderChunk(int index, const UMat& imageL, const UMat& imageR,  UMat& chunk, float motionThreshold) {
+	void renderChunk(int index, const UMat& imageL, const UMat& imageR, UMat& chunkL, UMat& chunkR, float motionThreshold) {
 
 		// compute optical flows
 		UMat flowLtoR;
@@ -345,13 +356,25 @@ struct RenderContext {
 			motionThreshold);
 
 		// combine novel views
-		oclCombineNovelViews(
-			warps[index],
-			imageL,
-			imageR,
-			flowLtoR,
-			flowRtoL,
-			chunk);
+		if (isStereo) {
+			oclCombineNovelViews(
+				warpLs[index],
+				warpRs[index],
+				imageL,
+				imageR,
+				flowLtoR,
+				flowRtoL,
+				chunkL,
+				chunkR);
+		} else {
+			oclCombineNovelViews(
+				warps[index],
+				imageL,
+				imageR,
+				flowLtoR,
+				flowRtoL,
+				chunkL);
+		}
 
 		// save previous images/flows
 		imageL.copyTo(preImageLs[index]);
@@ -361,31 +384,36 @@ struct RenderContext {
 	}
 
 
-	void renderChunks(const vector<UMat>& imgLs, const vector<UMat>& imgRs, vector<UMat>& chunks, float motionThreshold) {
-
-		// put render tasks to input queue
-		if (chunks.size() != imgLs.size()) {
-			chunks.assign(imgLs.size(), UMat());
+	void renderChunks(const vector<UMat>& imgLs, const vector<UMat>& imgRs, vector<UMat>& chunkLs, vector<UMat>& chunkRs, float motionThreshold) {
+		
+		// re-assign output chunks if size different
+		if (chunkLs.size() != imgLs.size()) {
+			chunkLs.assign(imgLs.size(), UMat());
+		}
+		if (isStereo && chunkRs.size() != imgRs.size()) {
+			chunkRs.assign(imgRs.size(), UMat());
 		}
 
 		// no render threads
 		if (threads.size() == 0) {
 			for (int index = 0; index < imgLs.size(); ++index) {
-				renderChunk(index, imgLs[index], imgRs[index], chunks[index], motionThreshold);
+				renderChunk(index, imgLs[index], imgRs[index], chunkLs[index], chunkRs[index], motionThreshold);
 				ocl::finish();
 			}
 			return;
 		}
 
+		// put task to input queue
 		for (int index = 0; index < imgLs.size(); ++index) {
-			RenderTask task = { index, &imgLs[index], &imgRs[index], &chunks[index], motionThreshold };
+			RenderTask task = { index, &imgLs[index], &imgRs[index], &chunkLs[index], &chunkRs[index], motionThreshold };
 			inQueue.enqueue(task);
 		}
 
 		// get chunks from output queue
 		for (int index = 0; index < imgLs.size(); ++index) {
 			RenderTask out = outQueue.dequeue();
-			chunks[out.index] = *(out.chunk);
+			chunkLs[out.index] = *(out.chunkL);
+			chunkRs[out.index] = *(out.chunkR);
 		}
 	}
 };
@@ -434,14 +462,25 @@ CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 		context.init(false, imageLs.size(), 2 * imageLs[0].cols , imageLs[0].rows, imageLs[0].cols, 0.0f);
 		context.startThreads();
 	}
-	context.renderChunks(imageLs, imageRs, chunks, motionThreshold);
+	vector<UMat> chunkDummys;
+	context.renderChunks(imageLs, imageRs, chunks, chunkDummys, motionThreshold);
 }
+CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
+	const std::vector<UMat>& imageLs,
+	const std::vector<UMat>& imageRs,
+	std::vector<UMat>& chunkLs,
+	std::vector<UMat>& chunkRs,
+	float motionThreshold) {
+	RenderContext& context = RenderContext::instance();
+	CV_Assert(context.isStereo && context.isInit());
+	context.renderChunks(imageLs, imageRs, chunkLs, chunkRs, motionThreshold);
+}
+
 
 CV_EXPORTS_W void oclClearPreviousFrames() {
 	RenderContext& context = RenderContext::instance();
 	context.resetPrevious();
 }
-
 
 static bool oclSelectDevice(string& device) {
 	// no platforms
@@ -488,7 +527,7 @@ CV_EXPORTS_W bool oclDeviceAvailable() {
 }
 
 
-CV_EXPORTS_W bool oclInitialize(const OclInitParameters* initParams) {
+CV_EXPORTS_W bool oclInitialize(const OclInitParameters* params) {
 	string device;
 	if (!oclSelectDevice(device)) {
 		return false;
@@ -513,17 +552,29 @@ CV_EXPORTS_W bool oclInitialize(const OclInitParameters* initParams) {
 	size_t maxBufferPoolSize = ocl::Device::getDefault().globalMemSize();
 	setBufferPoolSize(maxBufferPoolSize);
 
-	if (initParams) {
+	if (params) {
+		// pre-alloc buffers and warm up
+		int numThreads = 2;
+		//bool succeed = oclInitBuffers(
+		//	params->numCams,
+		//	Size(params->camImageWidth - params->numNovelViews, params->camImageHeight),
+		//	Size(params->numNovelViews, params->camImageHeight),
+		//	numThreads);
+		//if (!succeed) {
+		//	return false;
+		//}
+		//releaseBufferPool();
+
 		// TODO: check the init parameters
 		RenderContext& context = RenderContext::instance();
 		context.init(
-			initParams->isStereo,
-			initParams->numCams,
-			initParams->opticalSize.width + initParams->numNovelViews,
-			initParams->opticalSize.height,
-			initParams->numNovelViews,
-			initParams->vergeAtInfinitySlabDisplacement);
-		context.startThreads();
+			params->isStereo,
+			params->numCams,
+			params->camImageWidth,
+			params->camImageHeight,
+			params->numNovelViews,
+			params->vergeAtInfinitySlabDisplacement);
+		context.startThreads(numThreads);
 	}
 	oclInitGammaLUT();
     return true;
@@ -536,6 +587,8 @@ CV_EXPORTS_W void oclRelease() {
 	oclReleaseGammaLUT();
 	releaseBufferPool();
 }
+
+
 
 
 }	// namespace imvt

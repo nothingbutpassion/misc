@@ -27,12 +27,14 @@ CV_EXPORTS_W std::pair<UMat, UMat> oclCombineLazyNovelViews(
 	const UMat& imageR,
 	const UMat& flowLtoR,
 	const UMat& flowRtoL);
+
 CV_EXPORTS_W UMat oclCombineLazyNovelViews(
 	const UMat& warp,
 	const UMat& imageL,
 	const UMat& imageR,
 	const UMat& flowLtoR,
 	const UMat& flowRtoL);
+
 CV_EXPORTS_W void oclCombineNovelViews(
 	const UMat& warp,
 	const UMat& imageL,
@@ -40,6 +42,17 @@ CV_EXPORTS_W void oclCombineNovelViews(
 	const UMat& flowLtoR,
 	const UMat& flowRtoL,
 	UMat& combined);
+
+CV_EXPORTS_W void oclCombineNovelViews(
+	const UMat& warpL,
+	const UMat& warpR,
+	const UMat& imageL,
+	const UMat& imageR,
+	const UMat& flowLtoR,
+	const UMat& flowRtoL,
+	UMat& leftEyeCombined,
+	UMat& rightEyeCombined);
+
 }	// namespace imvt
 }	// namespace ocl
 }	// namespace cv

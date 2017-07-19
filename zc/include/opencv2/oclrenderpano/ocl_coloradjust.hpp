@@ -1,3 +1,6 @@
+#ifndef __OCL_COLORADJUST_HPP_
+#define __OCL_COLORADJUST_HPP_
+
 #include <vector>
 #include <opencv2/core.hpp>
 
@@ -19,3 +22,6 @@ CV_EXPORTS_W void oclReleaseGammaLUT();
 }	// namespace imvt
 }	// namespace ocl
 }	// namespace cv
+
+
+#endif // __OCL_COLORADJUST_HPP_

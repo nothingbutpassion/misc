@@ -19,12 +19,12 @@ CV_EXPORTS_W bool oclDeviceAvailable();
 */
 struct OclInitParameters {
 	  bool isStereo = false;
-	  float vergeAtInfinitySlabDisplacement = 0.0f;
 	  int numCams =-1;
 	  int numNovelViews = -1;
-	  Size opticalSize = Size{-1, -1};
+	  int camImageWidth = -1;
+	  int camImageHeight = -1;
+	  float vergeAtInfinitySlabDisplacement = 0.0f;
 };
-
 
 /**
 * @brief Initialize OpenCL: check device avaliablity and alloc related resource.
@@ -88,6 +88,13 @@ CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 	const std::vector<UMat>& imageLs,
 	const std::vector<UMat>& imageRs,
 	std::vector<UMat>& chunks,
+	float motionThreshold = 1.0f);
+
+CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
+	const std::vector<UMat>& imageLs,
+	const std::vector<UMat>& imageRs,
+	std::vector<UMat>& chunkLs,
+	std::vector<UMat>& chunkRs,
 	float motionThreshold = 1.0f);
 
 
