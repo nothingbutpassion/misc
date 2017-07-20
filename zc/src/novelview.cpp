@@ -258,6 +258,30 @@ struct OCLNovelViewGeneratorLazyFlow {
 		return make_pair(novelView, novelViewFlowMag);
 	}
 
+	void renderLazyNovelView(
+		const UMat& novelViewWarpBuffer,
+		const UMat& srcImage,
+		const UMat& opticalFlow,
+		const bool invertT,
+		UMat& novelView,
+		UMat& novelViewFlowMag,
+		UMat& tmp1 = UMat(),
+		UMat& tmp2 = UMat()) {
+
+		tmp1.create(novelViewWarpBuffer.size(), CV_32FC2);
+		UMat warpOpticalFlow = tmp1;
+		oclGetWarpOpticalFlow(novelViewWarpBuffer, warpOpticalFlow);
+		UMat remappedFlow = tmp2;
+		oclRemap(opticalFlow, remappedFlow, warpOpticalFlow);
+
+		UMat warpComposition = tmp1;
+		oclGetWarpComposition(novelViewWarpBuffer, remappedFlow, warpComposition, invertT ? 1 : 0);
+		oclRemap(srcImage, novelView, warpComposition);
+
+		novelViewFlowMag.create(novelView.size(), CV_32F);
+		oclGetNovelViewFlowMag(novelViewWarpBuffer, remappedFlow, novelView, novelViewFlowMag, invertT ? 1 : 0);
+	}
+
 
 	pair<UMat, UMat> combineLazyNovelViews(
 		const OCLLazyNovelViewBuffer& lazyBuffer) {
@@ -309,6 +333,67 @@ struct OCLNovelViewGeneratorLazyFlow {
 		const OCLLazyNovelViewBuffer& lazyBuffer, UMat& leftEyeCombined, UMat& rightEyeCombined) {
 
 		// two images for the left eye (to be combined)
+		pair<UMat, UMat> leftEyeFromLeft;
+		renderLazyNovelView(
+			lazyBuffer.warpL,
+			imageL,
+			flowRtoL,
+			false,
+			leftEyeFromLeft.first,
+			leftEyeFromLeft.second);
+
+		pair<UMat, UMat> leftEyeFromRight;
+		renderLazyNovelView(
+			lazyBuffer.warpL,
+			imageR,
+			flowLtoR,
+			true,
+			leftEyeFromRight.first,
+			leftEyeFromRight.second);
+
+		leftEyeCombined.create(leftEyeFromLeft.first.size(), CV_8UC4);
+		oclCombineLazyViews(
+			leftEyeFromLeft.first,
+			leftEyeFromRight.first,
+			leftEyeFromLeft.second,
+			leftEyeFromRight.second,
+			leftEyeCombined);
+
+
+		// two images for the right eye (to be combined)
+		pair<UMat, UMat> rightEyeFromLeft;
+		swap(rightEyeFromLeft, leftEyeFromLeft);
+		renderLazyNovelView(
+			lazyBuffer.warpR,
+			imageL,
+			flowRtoL,
+			false,
+			rightEyeFromLeft.first,
+			rightEyeFromLeft.second);
+		pair<UMat, UMat> rightEyeFromRight;
+		swap(rightEyeFromRight, leftEyeFromRight);
+		renderLazyNovelView(
+			lazyBuffer.warpR,
+			imageR,
+			flowLtoR,
+			true,
+			rightEyeFromRight.first,
+			rightEyeFromRight.second);
+
+		rightEyeCombined.create(rightEyeFromLeft.first.size(), CV_8UC4);
+		oclCombineLazyViews(
+			rightEyeFromLeft.first,
+			rightEyeFromRight.first,
+			rightEyeFromLeft.second,
+			rightEyeFromRight.second,
+			rightEyeCombined);
+	}
+
+	/*
+	void combineLazyNovelViews(
+		const OCLLazyNovelViewBuffer& lazyBuffer, UMat& leftEyeCombined, UMat& rightEyeCombined) {
+
+		// two images for the left eye (to be combined)
 		pair<UMat, UMat> leftEyeFromLeft = renderLazyNovelView(
 			lazyBuffer.warpL,
 			imageL,
@@ -348,7 +433,7 @@ struct OCLNovelViewGeneratorLazyFlow {
 			rightEyeFromRight.second,
 			rightEyeCombined);
 	}
-
+	*/
 
 
 	UMat combineLazyNovelViews(const UMat& warp) {
@@ -376,17 +461,23 @@ struct OCLNovelViewGeneratorLazyFlow {
 	}
 
 	void combineLazyNovelViews(const UMat& warp, UMat& combined) {
-		pair<UMat, UMat> leftEyeFromLeft = renderLazyNovelView(
+		pair<UMat, UMat> leftEyeFromLeft;
+		renderLazyNovelView(
 			warp,
 			imageL,
 			flowRtoL,
-			false);
+			false,
+			leftEyeFromLeft.first,
+			leftEyeFromLeft.second);
 
-		pair<UMat, UMat> leftEyeFromRight = renderLazyNovelView(
+		pair<UMat, UMat> leftEyeFromRight;
+		renderLazyNovelView(
 			warp,
 			imageR,
 			flowLtoR,
-			true);
+			true,
+			leftEyeFromRight.first,
+			leftEyeFromRight.second);
 
 		combined.create(leftEyeFromLeft.first.size(), CV_8UC4);
 		oclCombineLazyViews(
