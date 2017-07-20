@@ -511,6 +511,7 @@ CV_EXPORTS_W void oclCombineNovelViews(
 	generatorLazyFlow.flowLtoR = flowLtoR;
 	generatorLazyFlow.flowRtoL = flowRtoL;
 	generatorLazyFlow.combineLazyNovelViews(warp, combined);
+	ocl::finish();
 }
 
 CV_EXPORTS_W void oclCombineNovelViews(
@@ -533,6 +534,7 @@ CV_EXPORTS_W void oclCombineNovelViews(
 	generatorLazyFlow.flowLtoR = flowLtoR;
 	generatorLazyFlow.flowRtoL = flowRtoL;
 	generatorLazyFlow.combineLazyNovelViews(lazyBuffer, leftEyeCombined, rightEyeCombined);
+	ocl::finish();
 }
 
 

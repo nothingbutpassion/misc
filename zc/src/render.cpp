@@ -288,6 +288,7 @@ struct RenderContext {
 				flowLtoR,
 				DirectionHint::LEFT,
 				t.motionThreshold);
+
 			oclComputeOpticalFlow(
 				*(t.imageR),
 				*(t.imageL),
@@ -326,7 +327,7 @@ struct RenderContext {
 			c->preFlowRtoLs[t.index] = flowRtoL;
 
 			// wait for opencl completed
-			ocl::Queue::getDefault().finish();
+			ocl::finish();
 			LOGD("render thread %u finished input task: %d\n", this_thread::get_id(), t.index);
  
 			// put render result to output queue

@@ -923,6 +923,7 @@ CV_EXPORTS_W void oclComputeOpticalFlow(
     DirectionHint hint,
 	float motionThreshhold) {
 	OpticalFlow().computeOpticalFlow(I0BGRA, I1BGRA, prevFlow, prevI0BGRA, prevI1BGRA, flow, hint, motionThreshhold);
+	ocl::finish();
 }
 
 }   // end namespace imvt
