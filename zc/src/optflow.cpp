@@ -747,12 +747,11 @@ struct OpticalFlow {
         /* @deleted
         medianBlur(flow, flow, kMedianBlurSize);
         */
-		//UMat cacheFlow;
-       
+        {
         UMat flowTmp;
         medianBlur(flow, flowTmp, kMedianBlurSize);
-		swap(flow, flowTmp);
-       
+        flow = flowTmp;
+        }
 		
 		/* @deleted
 		// sweep from bottom/right
@@ -777,9 +776,11 @@ struct OpticalFlow {
         /* @deleted
 		medianBlur(flow, flow, kMedianBlurSize);
 		*/
+        {
+        UMat flowTmp;
         medianBlur(flow, flowTmp, kMedianBlurSize);
-		swap(flow, flowTmp);
-  
+        flow = flowTmp;
+        }
         
 		lowAlphaFlowDiffusion(alpha0, alpha1, flow);
 

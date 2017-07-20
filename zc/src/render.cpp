@@ -398,7 +398,7 @@ struct RenderContext {
 		if (chunkLs.size() != imgLs.size()) {
 			chunkLs.assign(imgLs.size(), UMat());
 		}
-		if (isStereo && chunkRs.size() != imgRs.size()) {
+		if (chunkRs.size() != imgRs.size()) {
 			chunkRs.assign(imgRs.size(), UMat());
 		}
 

@@ -74,7 +74,7 @@ CV_EXPORTS_W void oclSweepFromBottom(
 	const UMat& alpha0, const UMat& alpha1, const UMat& I0x, const UMat& I0y,
 	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow);
 CV_EXPORTS_W void oclGaussianBlur(const UMat& src, UMat& dst, Size ksize, double sigma);
-CV_EXPORTS_W void oclGaussianBlurV2(const UMat& src, UMat& dst, Size ksize, double sigma, UMat& tmp);
+CV_EXPORTS_W void oclGaussianBlurV2(const UMat& src, UMat& dst, Size ksize, double sigma, UMat& tmp = UMat());
 
 enum class DirectionHint {
 	UNKNOWN,

@@ -22,8 +22,8 @@
 #define EXTRAPOLATE(i, m)	(i) < 0 ? -(i) : ((i) > (m) ? ((m)<<1)-(i) : (i))
 #endif
 
-#define KERNEL_X_DATA DIG(0.1065069810f)DIG(0.7869860530f)DIG(0.1065069810f)
-#define KERNEL_Y_DATA DIG(0.1065069810f)DIG(0.7869860530f)DIG(0.1065069810f)
+//#define KERNEL_X_DATA DIG(0.1065069810f)DIG(0.7869860530f)DIG(0.1065069810f)
+//#define KERNEL_Y_DATA DIG(0.1065069810f)DIG(0.7869860530f)DIG(0.1065069810f)
 
 #define DIG(a) a,
 __constant float kernel_x[] = { KERNEL_X_DATA };
@@ -131,6 +131,10 @@ __kernel void filter_col_8UC4(
 		wmat8uc4(dst, x, y) = convert_uchar4_sat(sum);
 	}
 }
+
+
+
+
 
 
 #define MAX_LOCAL_ROWS 32
