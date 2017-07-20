@@ -171,12 +171,20 @@ struct RenderContext {
 				warpR.at<Point3f>(y, x) = Point3f(slabShift - vergeAtInfinitySlabDisplacement, y, shift);
 			};
 		}
-		warpLs.assign(numCams, UMat());
-		warpRs.assign(numCams, UMat());
-		for (int i = 0; i < numCams; ++i) {
-			warpL.copyTo(warpLs[i]);
-			warpR.copyTo(warpRs[i]);
-		}
+		UMat uwarpL;
+		UMat uwarpR;
+		warpL.copyTo(uwarpL);
+		warpR.copyTo(uwarpR);
+		warpLs.assign(numCams, uwarpL);
+		warpRs.assign(numCams, uwarpR);
+
+		// @deprecated
+		//warpLs.assign(numCams, UMat());
+		//warpRs.assign(numCams, UMat());
+		//for (int i = 0; i < numCams; ++i) {
+		//	warpL.copyTo(warpLs[i]);
+		//	warpR.copyTo(warpRs[i]);
+		//}
 	}
 
 	void init(
@@ -480,6 +488,7 @@ CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 CV_EXPORTS_W void oclClearPreviousFrames() {
 	RenderContext& context = RenderContext::instance();
 	context.resetPrevious();
+	ocl::finish();
 }
 
 static bool oclSelectDevice(string& device) {
@@ -554,16 +563,16 @@ CV_EXPORTS_W bool oclInitialize(const OclInitParameters* params) {
 
 	if (params) {
 		// pre-alloc buffers and warm up
-		int numThreads = 2;
-		//bool succeed = oclInitBuffers(
-		//	params->numCams,
-		//	Size(params->camImageWidth - params->numNovelViews, params->camImageHeight),
-		//	Size(params->numNovelViews, params->camImageHeight),
-		//	numThreads);
-		//if (!succeed) {
-		//	return false;
-		//}
-		//releaseBufferPool();
+		int numThreads = 4;
+		bool succeed = oclInitBuffers(
+			params->numCams,
+			Size(params->camImageWidth - params->numNovelViews, params->camImageHeight),
+			Size(params->numNovelViews, params->camImageHeight),
+			numThreads);
+		if (!succeed) {
+			return false;
+		}
+		releaseBufferPool();
 
 		// TODO: check the init parameters
 		RenderContext& context = RenderContext::instance();
@@ -586,6 +595,7 @@ CV_EXPORTS_W void oclRelease() {
 	context.release();
 	oclReleaseGammaLUT();
 	releaseBufferPool();
+	ocl::finish();
 }
 
 

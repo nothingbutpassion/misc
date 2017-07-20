@@ -57,13 +57,11 @@ CV_EXPORTS_W void oclProjection(
 			UMat dstImage;
 			oclCubicRemap(srcImages[i], dstImage, xmap[i], ymap[i]);
 			cvtColor(dstImage, dstImages[i], COLOR_BGR2BGRA);
-			//UMat tmp;
-			//cvtColor(srcImages[i],  tmp, COLOR_BGR2BGRA);
-			//oclCubicRemap(tmp, dstImages[i], xmap[i], ymap[i]);
 		} else {
 			oclCubicRemap(srcImages[i], dstImages[i], xmap[i], ymap[i]);
 		}
 	}
+	ocl::finish();
 }
 
 
@@ -82,6 +80,7 @@ CV_EXPORTS_W void oclSmoothImage(UMat& pano, const UMat& previous, float thresh_
 		size_t globalsize[] = { pano.cols, pano.rows };
 		size_t localsize[] = { 16, 16 };
 		k.run(2, globalsize, localsize, false);
+		ocl::finish();
 	}
 }
 
@@ -90,6 +89,7 @@ CV_EXPORTS_W void oclSharpImage(UMat& sphericalImage, float factor) {
 		UMat blured;
 		oclGaussianBlur(sphericalImage, blured, Size(3, 3), 3);
 		cv::addWeighted(sphericalImage, 1 + factor, blured, -1 * factor, 0, sphericalImage);
+		ocl::finish();
 	}
 }
 
@@ -108,6 +108,7 @@ CV_EXPORTS_W void oclStackHorizontal(const std::vector<UMat>& srcImages, UMat& d
 		srcImages[i].copyTo(dpart);
 		cols += srcImages[i].cols;
 	}
+	ocl::finish();
 }
 
 
@@ -137,6 +138,7 @@ CV_EXPORTS_W void oclOffsetHorizontalWrap(UMat& image, float offset) {
 	UMat dst;
 	oclOffsetHorizontalWrap(image, offset, dst);
 	image = dst;
+	ocl::finish();
 }
 
 static void olcRemoveChunkLine(UMat& chunk) {
@@ -152,6 +154,7 @@ CV_EXPORTS_W void oclRemoveChunkLines(vector<UMat>& chunks) {
 	for (int i = 0; i < chunks.size(); ++i) {
 		olcRemoveChunkLine(chunks[i]);
 	}
+	ocl::finish();
 }
 
 

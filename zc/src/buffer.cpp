@@ -136,20 +136,23 @@ void allocForOpticalFlow(vector<UMat>& buffers, Size imgSize) {
 	APPEND(pyramidI1x);
 	APPEND(pyramidI1y);
 
-	// for flowTmp, blurredFlowTmp, I0xTmp, I0yTmp, I1xTmp, I1yTmp
+	// for flowTmp, blurredFlowTmp, flowMedianBlur, I0xTmp, I0yTmp, I1xTmp, I1yTmp
 	UMat flowTmp(downscaleSize, CV_32FC2);
+	UMat flowGaussianBlurTmp(downscaleSize, CV_32FC2);
 	UMat blurredFlowTmp(downscaleSize, CV_32FC2);
 	UMat I0xTmp(downscaleSize, CV_32F);
 	UMat I0yTmp(downscaleSize, CV_32F);
 	UMat I1xTmp(downscaleSize, CV_32F);
 	UMat I1yTmp(downscaleSize, CV_32F);
 	vector<UMat> pyramidFlowTmp = buildPyramid(flowTmp);
+	vector<UMat> pyramidFlowGaussianBlurTmp = buildPyramid(flowGaussianBlurTmp);
 	vector<UMat> pyramidBlurredFlowTmp = buildPyramid(blurredFlowTmp);
 	vector<UMat> pyramidI0xTmp = buildPyramid(I0xTmp);
 	vector<UMat> pyramidI0yTmp = buildPyramid(I0yTmp);
 	vector<UMat> pyramidI1xTmp = buildPyramid(I1xTmp);
 	vector<UMat> pyramidI1yTmp = buildPyramid(I1yTmp);
 	APPEND(pyramidFlowTmp);
+	APPEND(pyramidFlowGaussianBlurTmp);
 	APPEND(pyramidBlurredFlowTmp);
 	APPEND(pyramidI0xTmp);
 	APPEND(pyramidI0yTmp);
@@ -187,10 +190,10 @@ void allocForGammaLUT(vector<UMat>& buffers) {
 	APPEND(lutAntiGamma);
 }
 
-void allocForWarps(vector<UMat>& buffers, int nCams, Size nvSize) {
+void allocForWarps(vector<UMat>& buffers, Size nvSize) {
 	vector<UMat> warpLs;
 	vector<UMat> warpRs;
-	for (int i = 0; i < nCams; ++i) {
+	for (int i = 0; i < 1; ++i) {
 		warpLs.push_back(UMat(nvSize, CV_32FC3));
 		warpRs.push_back(UMat(nvSize, CV_32FC3));
 	}
@@ -235,22 +238,17 @@ size_t getReservedBufferSize() {
 }
 
 CV_EXPORTS_W bool oclInitBuffers(int nCams, Size optSize, Size nvSize, int& numThreads) {
+	
 	LOGD("before hold, reserved buffer size: %llu\n", getReservedBufferSize());
 
 	// hold buffers for render chunks
-	vector<UMat> hold;
-	allocForGammaLUT(hold);
-	allocForWarps(hold, nCams, nvSize);
-	allocForPrevious(hold, nCams, optSize);
-	size_t commonSize = estimate(hold);
-
-	allocForRenderChunks(hold, 1, optSize, nvSize);
-	size_t chunkSize = estimate(hold) - commonSize;
-	
-	LOGD("basic buffer size: %llu\n", commonSize);
-	LOGD("chunk buffer size: %llu\n", chunkSize);
-
-	LOGD("after hold, reserved buffer size: %llu\n", getReservedBufferSize());
+	vector<UMat> common;
+	allocForGammaLUT(common);
+	allocForWarps(common, nvSize);
+	allocForPrevious(common, nCams, optSize);
+	size_t commonSize = estimate(common);
+	LOGD("common buffer size: %llu\n", commonSize);
+	LOGD("after common alloc, reserved buffer size: %llu\n", getReservedBufferSize());
 
 	// try to run other functions
 	{
@@ -267,50 +265,50 @@ CV_EXPORTS_W bool oclInitBuffers(int nCams, Size optSize, Size nvSize, int& numT
 
 	oclRemoveChunkLines(chunkLs);
 	oclRemoveChunkLines(chunkRs);
-	ocl::finish();
 
 	UMat panoL;
 	UMat panoR;
 	oclStackHorizontal(chunkLs, panoL);
 	oclStackHorizontal(chunkRs, panoR);
-	ocl::finish();
 
 	oclSharpImage(panoL, 0.5);
 	oclSharpImage(panoR, 0.5);
-	ocl::finish();
 
 	UMat prePanoL(panoL.size(), panoL.type());
 	UMat prePanoR(panoR.size(), panoR.type());
 	oclSmoothImage(panoL, prePanoL, 0.05f, true);
 	oclSmoothImage(panoR, prePanoR, 0.05f, true);
-	ocl::finish();
 
 	oclOffsetHorizontalWrap(panoL, 150);
 	oclOffsetHorizontalWrap(panoR, -150);
-	ocl::finish();
 	}
-
 	LOGD("after warm up, reserved buffer size: %llu\n", getReservedBufferSize());
 
+	vector<UMat> chunks;
+	allocForRenderChunks(chunks, 1, optSize, nvSize);
+	size_t chunkSize = estimate(chunks);
+	LOGD("chunk buffer size: %llu\n", chunkSize);
+	LOGD("after one chunk alloc, reserved buffer size: %llu\n", getReservedBufferSize());
+
 	size_t reservedSize = getReservedBufferSize();
-	size_t globalMemSize = ocl::Device::getDefault().globalMemSize();
-	if (commonSize + chunkSize +  reservedSize > globalMemSize) {
+	size_t globalSize = ocl::Device::getDefault().globalMemSize();
+	if (commonSize + chunkSize +  reservedSize > globalSize) {
 		return false;
 	}
+	numThreads = (globalSize - commonSize - reservedSize) / chunkSize;
+	numThreads = numThreads >= 2 ? (numThreads >= 4 ? 4 : 2) : 1;
+	LOGD("suggest thread num: %d\n", numThreads);
 
-	numThreads = 1;
-	if (commonSize + 2 * chunkSize + reservedSize < globalMemSize) {
-		numThreads = 2;
-	}
-	if (commonSize + 4 * chunkSize + reservedSize < globalMemSize) {
-		numThreads = 4;
-	}
-	LOGD("suggest thread num: %llu\n", numThreads);
+	allocForRenderChunks(chunks, numThreads - 1, optSize, nvSize);
+	LOGD("after other chunks alloc, reserved buffer size: %llu\n", getReservedBufferSize());
 
-	allocForRenderChunks(hold, numThreads - 1, optSize, nvSize);
-	hold.clear();
+	chunks.clear();
 	ocl::finish();
-	LOGD("after hold release, reserved buffer size: %llu\n", getReservedBufferSize());
+	LOGD("after chunks release, reserved buffer size: %llu\n", getReservedBufferSize());
+
+	common.clear();
+	ocl::finish();
+	LOGD("after hold, reserved buffer size: %llu\n", getReservedBufferSize());
 	return true;
 }
 

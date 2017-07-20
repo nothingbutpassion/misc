@@ -294,6 +294,7 @@ CV_EXPORTS_W bool oclPreColorAdjustByGamma(
 			}
 		}
 		if (!need_adjust) {
+			ocl::finish();
 			return need_adjust;
 		}
 
@@ -317,6 +318,7 @@ CV_EXPORTS_W bool oclPreColorAdjustByGamma(
 		multiply(gammaMats[i], 1.0/256, gammaMats[i]);
 		gammaMats[i].convertTo(spheres[i], CV_8UC4);
 	}
+	ocl::finish();
 	return true;
 }
 

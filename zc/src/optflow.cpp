@@ -360,9 +360,9 @@ CV_EXPORTS_W void oclGaussianBlur(const UMat& src, UMat& dst, Size ksize, double
 	colKernel.run(2, globalsize, localsize, false);
 }
 
-CV_EXPORTS_W void oclGaussianBlurV2(const UMat& src, UMat& dst, Size ksize, double sigma) {
+CV_EXPORTS_W void oclGaussianBlurV2(const UMat& src, UMat& dst, Size ksize, double sigma, UMat& tmp) {
 
-	CV_Assert(src.type() == CV_32FC1 || src.type() == CV_32FC2);
+	CV_Assert(src.type() == CV_32FC1 || src.type() == CV_32FC2 || src.type() == CV_8UC4);
 
 	int depth = CV_MAT_DEPTH(src.type());
 	UMat s = src;
@@ -370,14 +370,15 @@ CV_EXPORTS_W void oclGaussianBlurV2(const UMat& src, UMat& dst, Size ksize, doub
 
 	int kernel_size = ksize.width;
 	Mat k = getGaussianKernel(kernel_size, sigma, std::max(depth, CV_32F));
-	String build_options = ocl::kernelToStr(k, depth, "KERNEL_X_DATA") + ocl::kernelToStr(k, depth, "KERNEL_Y_DATA");
-	string typeStr = src.type() == CV_32FC1 ? "_32FC1" : "_32FC2";
+
+	String build_options = ocl::kernelToStr(k, CV_32F, "KERNEL_X_DATA") + ocl::kernelToStr(k, CV_32F, "KERNEL_Y_DATA");
+	string typeStr = src.type() == CV_32FC1 ? "_32FC1" : src.type() == CV_32FC2 ? "_32FC2" : "_8UC4";
 	size_t globalsize[] = { dst.cols, dst.rows };
 	size_t localsize[] = { 16, 16 };
 
 	// row filter
-	UMat tmp(s.size(), s.type());
-	string rowKernelName = string("filter_row_v2") + typeStr;
+	tmp.create(s.size(), s.type());
+	string rowKernelName = string("filter_row") + typeStr;
 	ocl::Kernel rowKernel(rowKernelName.c_str(), ocl::oclrenderpano::sepfilter2d_oclsrc, build_options);
 	rowKernel.args(ocl::KernelArg::ReadOnlyNoSize(src),
 		ocl::KernelArg::WriteOnly(tmp),
@@ -385,7 +386,7 @@ CV_EXPORTS_W void oclGaussianBlurV2(const UMat& src, UMat& dst, Size ksize, doub
 	rowKernel.run(2, globalsize, localsize, false);
 
 	// col filter
-	string colKernelName = string("filter_col_v2") + typeStr;
+	string colKernelName = string("filter_col") + typeStr;
 	ocl::Kernel colKernel(colKernelName.c_str(), ocl::oclrenderpano::sepfilter2d_oclsrc, build_options);
 	colKernel.args(ocl::KernelArg::ReadOnlyNoSize(tmp),
 		ocl::KernelArg::WriteOnly(dst),
@@ -746,11 +747,12 @@ struct OpticalFlow {
         /* @deleted
         medianBlur(flow, flow, kMedianBlurSize);
         */
-        {
+		//UMat cacheFlow;
+       
         UMat flowTmp;
         medianBlur(flow, flowTmp, kMedianBlurSize);
-        flow = flowTmp;
-        }
+		swap(flow, flowTmp);
+       
 		
 		/* @deleted
 		// sweep from bottom/right
@@ -775,11 +777,9 @@ struct OpticalFlow {
         /* @deleted
 		medianBlur(flow, flow, kMedianBlurSize);
 		*/
-        {
-        UMat flowTmp;
         medianBlur(flow, flowTmp, kMedianBlurSize);
-        flow = flowTmp;
-        }
+		swap(flow, flowTmp);
+  
         
 		lowAlphaFlowDiffusion(alpha0, alpha1, flow);
 
