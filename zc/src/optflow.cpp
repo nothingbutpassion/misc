@@ -3,6 +3,7 @@
 #include "opencv2/core/opencl/runtime/opencl_core_wrappers.hpp"
 #include "opencl_kernels_oclrenderpano.hpp"
 #include "opencv2/oclrenderpano/ocl_optflow.hpp"
+#include "opencv2/oclrenderpano.hpp"
 
 namespace cv {
 namespace ocl {
@@ -445,7 +446,9 @@ struct OpticalFlow {
 		const UMat& prevI1BGRA,
 		UMat& flow,
 		DirectionHint hint,
-		float motionThreshhold = 1.0f) {
+		float motionThreshhold = 1.0f,
+		float smoothThreshhold = 0.01f
+		) {
 
 		CV_Assert(prevFlow.dims == 0 || prevFlow.size() == rgba0byte.size());
 
@@ -464,7 +467,7 @@ struct OpticalFlow {
 		resize(rgba1byte, rgba1byteDownscaled, downscaleSize, 0, 0, CV_INTER_CUBIC);
 		*/
 		UMat rgba0byteDownscaled, rgba1byteDownscaled;
-		UMat prevFlowDownscaled, prevI1BGRADownscaled;
+		UMat prevFlowDownscaled, prevI0BGRADownscaled, prevI1BGRADownscaled;
 		cv::Size originalSize = rgba0byte.size();
 		cv::Size downscaleSize(rgba0byte.cols * kDownscaleFactor, rgba0byte.rows * kDownscaleFactor);
 		oclResize(rgba0byte, rgba0byteDownscaled, downscaleSize);
@@ -485,8 +488,12 @@ struct OpticalFlow {
 			*/
 			oclResize(prevFlow, prevFlowDownscaled, downscaleSize);
 			oclScale(prevFlowDownscaled, float(prevFlowDownscaled.rows) / float(prevFlow.rows));
-			// oclResize(prevI0BGRA, prevI0BGRADownscaled, downscaleSize);
+			oclResize(prevI0BGRA, prevI0BGRADownscaled, downscaleSize);
 			oclResize(prevI1BGRA, prevI1BGRADownscaled, downscaleSize);
+
+			// @changed
+			oclSmoothImage(rgba0byteDownscaled, prevI0BGRADownscaled, smoothThreshhold, true);
+			oclSmoothImage(rgba1byteDownscaled, prevI1BGRADownscaled, smoothThreshhold, true);
 
 			// @added
 			motion.create(downscaleSize, CV_32F);
@@ -504,6 +511,7 @@ struct OpticalFlow {
 			*/
 			oclMotionDetectionV2(rgba1byteDownscaled, prevI1BGRADownscaled, motion);
 			/* @optimized */
+			prevI0BGRADownscaled = UMat();
 			prevI1BGRADownscaled = UMat();
 		}
 
@@ -548,8 +556,11 @@ struct OpticalFlow {
 		GaussianBlur(I0, I0, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
 		GaussianBlur(I1, I1, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
 		*/
-		oclGaussianBlur(I0, I0, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
-		oclGaussianBlur(I1, I1, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
+		{
+		UMat I0Tmp;
+		oclGaussianBlurV2(I0, I0, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma, I0Tmp);
+		oclGaussianBlurV2(I1, I1, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma, I0Tmp);
+		}
 
 		vector<UMat> pyramidI0 = buildPyramid(I0);
 		vector<UMat> pyramidI1 = buildPyramid(I1);
@@ -690,13 +701,6 @@ struct OpticalFlow {
 		GaussianBlur(I1x, I1x, kGradientBlurSize, kGradientBlurSigma);
 		GaussianBlur(I1y, I1y, kGradientBlurSize, kGradientBlurSigma);
 		*/
-
-		//I0 = UMat();
-		//I1 = UMat();
-		//oclGaussianBlur(I0x, I0x, kGradientBlurSize, kGradientBlurSigma);
-		//oclGaussianBlur(I0y, I0y, kGradientBlurSize, kGradientBlurSigma);
-		//oclGaussianBlur(I1x, I1x, kGradientBlurSize, kGradientBlurSigma);
-		//oclGaussianBlur(I1y, I1y, kGradientBlurSize, kGradientBlurSigma);
 
 		/* @optimized */
 		{

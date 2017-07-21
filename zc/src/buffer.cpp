@@ -68,12 +68,14 @@ void allocForOpticalFlow(vector<UMat>& buffers, Size imgSize) {
 	APPEND(finalFlow);
 	APPEND(finalFlowTmp);
 
-	// for rgba0byteDownscaled, rgba1byteDownscaled, prevI1BGRADownscaled
+	// for rgba0byteDownscaled, rgba1byteDownscaled, prevI0BGRADownscaled, prevI1BGRADownscaled
 	UMat rgba0byteDownscaled(downscaleSize, CV_8UC4);
 	UMat rgba1byteDownscaled(downscaleSize, CV_8UC4); 
+	UMat prevI0BGRADownscaled(downscaleSize, CV_8UC4);
 	UMat prevI1BGRADownscaled(downscaleSize, CV_8UC4);
 	APPEND(rgba0byteDownscaled);
 	APPEND(rgba1byteDownscaled);
+	APPEND(prevI0BGRADownscaled);
 	APPEND(prevI1BGRADownscaled);
 
 	// for I0Grey, I1Grey, 
@@ -82,11 +84,9 @@ void allocForOpticalFlow(vector<UMat>& buffers, Size imgSize) {
 	APPEND(I0Grey);
 	APPEND(I1Grey);
 
-	// for I0Tmp, I1Tmp (Gaussian blur)
+	// for I0Tmp,(Gaussian blur)
 	UMat I0Tmp(downscaleSize, CV_32F);
-	UMat I1Tmp(downscaleSize, CV_32F);
 	APPEND(I0Tmp);
-	APPEND(I1Tmp);
 
 	// for channels0, channels1
 	vector<UMat> channels0;
@@ -116,71 +116,65 @@ void allocForOpticalFlow(vector<UMat>& buffers, Size imgSize) {
 	APPEND(prevFlowPyramid);
 	APPEND(motionPyramid);
 
-	// for flow,blurredFlow, I0x, I0y, I1x, I1y
+	// for flow, flowTmp blurredFlow, I0x, I0y, I1x, I1y
 	UMat flow(downscaleSize, CV_32FC2);
+	UMat flowTmp(downscaleSize, CV_32FC2);
 	UMat blurredFlow(downscaleSize, CV_32FC2);
 	UMat I0x(downscaleSize, CV_32F);
 	UMat I0y(downscaleSize, CV_32F);
 	UMat I1x(downscaleSize, CV_32F);
 	UMat I1y(downscaleSize, CV_32F);
 	vector<UMat> pyramidFlow = buildPyramid(flow);
+	vector<UMat> pyramidFlowTmp = buildPyramid(flowTmp);
 	vector<UMat> pyramidBlurredFlow = buildPyramid(blurredFlow);
 	vector<UMat> pyramidI0x = buildPyramid(I0x);
 	vector<UMat> pyramidI0y = buildPyramid(I0y);
 	vector<UMat> pyramidI1x = buildPyramid(I1x);
 	vector<UMat> pyramidI1y = buildPyramid(I1y);
 	APPEND(pyramidFlow);
+	APPEND(pyramidFlowTmp);
 	APPEND(pyramidBlurredFlow);
 	APPEND(pyramidI0x);
 	APPEND(pyramidI0y);
 	APPEND(pyramidI1x);
 	APPEND(pyramidI1y);
-
-	// for flowTmp, blurredFlowTmp, flowMedianBlur, I0xTmp, I0yTmp, I1xTmp, I1yTmp
-	UMat flowTmp(downscaleSize, CV_32FC2);
-	UMat flowGaussianBlurTmp(downscaleSize, CV_32FC2);
-	UMat blurredFlowTmp(downscaleSize, CV_32FC2);
-	UMat I0xTmp(downscaleSize, CV_32F);
-	UMat I0yTmp(downscaleSize, CV_32F);
-	UMat I1xTmp(downscaleSize, CV_32F);
-	UMat I1yTmp(downscaleSize, CV_32F);
-	vector<UMat> pyramidFlowTmp = buildPyramid(flowTmp);
-	vector<UMat> pyramidFlowGaussianBlurTmp = buildPyramid(flowGaussianBlurTmp);
-	vector<UMat> pyramidBlurredFlowTmp = buildPyramid(blurredFlowTmp);
-	vector<UMat> pyramidI0xTmp = buildPyramid(I0xTmp);
-	vector<UMat> pyramidI0yTmp = buildPyramid(I0yTmp);
-	vector<UMat> pyramidI1xTmp = buildPyramid(I1xTmp);
-	vector<UMat> pyramidI1yTmp = buildPyramid(I1yTmp);
-	APPEND(pyramidFlowTmp);
-	APPEND(pyramidFlowGaussianBlurTmp);
-	APPEND(pyramidBlurredFlowTmp);
-	APPEND(pyramidI0xTmp);
-	APPEND(pyramidI0yTmp);
-	APPEND(pyramidI1xTmp);
-	APPEND(pyramidI1yTmp);
 }
 
 
 void allocForNovelView(vector<UMat>& buffers, Size nvSize) {
 	// for render Lazy Novel View
-	UMat map(nvSize, CV_32FC2);
-	UMat mapedFlow(nvSize, CV_32FC2);
+	UMat warpOpticalFlow(nvSize, CV_32FC2);
+	UMat remappedFlow(nvSize, CV_32FC2);
+	APPEND(warpOpticalFlow);
+	APPEND(remappedFlow);
+
+	// for novelView, novelViewFlowMag
 	UMat novelView(nvSize, CV_8UC4);
 	UMat novelViewFlowMag(nvSize, CV_32F);
 	for (int i = 0; i < 4; ++i) {
-		APPEND(map);
-		APPEND(mapedFlow);
 		APPEND(novelView);
 		APPEND(novelViewFlowMag);
 	}
 }
 
 void allocForRenderChunks(vector<UMat>& buffers, int nCams, Size optSize, Size nvSize) {
+	vector<UMat> flowLtoRs;
+	vector<UMat> flowRtoLs;
+	vector<UMat> chunkLs;
+	vector<UMat> chunkRs;
 	for (int i = 0; i < nCams; ++i) {
-		allocForOpticalFlow(buffers, optSize);
+		flowLtoRs.push_back(UMat(optSize, CV_32FC2));
+		flowRtoLs.push_back(UMat(optSize, CV_32FC2));
+		chunkLs.push_back(UMat(nvSize, CV_32FC2));
+		chunkRs.push_back(UMat(nvSize, CV_32FC2));
+
 		allocForOpticalFlow(buffers, optSize);
 		allocForNovelView(buffers, nvSize);
 	}
+	APPEND(flowLtoRs);
+	APPEND(flowRtoLs);
+	APPEND(chunkLs);
+	APPEND(chunkRs);
 }
 
 void allocForGammaLUT(vector<UMat>& buffers) {
@@ -239,7 +233,8 @@ size_t getReservedBufferSize() {
 
 CV_EXPORTS_W bool oclInitBuffers(int nCams, Size optSize, Size nvSize, int& numThreads) {
 	
-	LOGD("before hold, reserved buffer size: %llu\n", getReservedBufferSize());
+	try {
+	LOGD("before init, reserved buffer size: %llu\n", getReservedBufferSize());
 
 	// hold buffers for render chunks
 	vector<UMat> common;
@@ -250,7 +245,7 @@ CV_EXPORTS_W bool oclInitBuffers(int nCams, Size optSize, Size nvSize, int& numT
 	LOGD("common buffer size: %llu\n", commonSize);
 	LOGD("after common alloc, reserved buffer size: %llu\n", getReservedBufferSize());
 
-	// try to run other functions
+	// run all functions except render chunks
 	{
 	vector<UMat> images(nCams);
 	vector<UMat> chunkLs(nCams);
@@ -261,7 +256,6 @@ CV_EXPORTS_W bool oclInitBuffers(int nCams, Size optSize, Size nvSize, int& numT
 		chunkRs[i] = UMat(nvSize, CV_8UC4);
 	}
 	oclPreColorAdjustByGamma(images, -1, 180, 0.01, false, false, true);
-	ocl::finish();
 
 	oclRemoveChunkLines(chunkLs);
 	oclRemoveChunkLines(chunkRs);
@@ -282,24 +276,29 @@ CV_EXPORTS_W bool oclInitBuffers(int nCams, Size optSize, Size nvSize, int& numT
 	oclOffsetHorizontalWrap(panoL, 150);
 	oclOffsetHorizontalWrap(panoR, -150);
 	}
+	ocl::finish();
+	size_t otherSize = getReservedBufferSize();
 	LOGD("after warm up, reserved buffer size: %llu\n", getReservedBufferSize());
 
 	vector<UMat> chunks;
 	allocForRenderChunks(chunks, 1, optSize, nvSize);
+	ocl::finish();
 	size_t chunkSize = estimate(chunks);
 	LOGD("chunk buffer size: %llu\n", chunkSize);
 	LOGD("after one chunk alloc, reserved buffer size: %llu\n", getReservedBufferSize());
 
-	size_t reservedSize = getReservedBufferSize();
 	size_t globalSize = ocl::Device::getDefault().globalMemSize();
-	if (commonSize + chunkSize +  reservedSize > globalSize) {
+	if (commonSize + chunkSize + otherSize > globalSize) {
 		return false;
 	}
-	numThreads = (globalSize - commonSize - reservedSize) / chunkSize;
+	numThreads = (globalSize - commonSize - otherSize) / chunkSize;
+	LOGD("max thread num: %d\n", numThreads);
+	numThreads = nCams > numThreads ? numThreads/2 : numThreads;
 	numThreads = numThreads >= 2 ? (numThreads >= 4 ? 4 : 2) : 1;
 	LOGD("suggest thread num: %d\n", numThreads);
 
 	allocForRenderChunks(chunks, numThreads - 1, optSize, nvSize);
+	ocl::finish();
 	LOGD("after other chunks alloc, reserved buffer size: %llu\n", getReservedBufferSize());
 
 	chunks.clear();
@@ -308,7 +307,12 @@ CV_EXPORTS_W bool oclInitBuffers(int nCams, Size optSize, Size nvSize, int& numT
 
 	common.clear();
 	ocl::finish();
-	LOGD("after hold, reserved buffer size: %llu\n", getReservedBufferSize());
+	LOGD("after init, reserved buffer size: %llu\n", getReservedBufferSize());
+	
+	} catch (...) {
+		LOGD("init buffer failed!");
+		return false;
+	}
 	return true;
 }
 

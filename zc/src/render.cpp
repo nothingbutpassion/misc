@@ -177,14 +177,6 @@ struct RenderContext {
 		warpR.copyTo(uwarpR);
 		warpLs.assign(numCams, uwarpL);
 		warpRs.assign(numCams, uwarpR);
-
-		// @deprecated
-		//warpLs.assign(numCams, UMat());
-		//warpRs.assign(numCams, UMat());
-		//for (int i = 0; i < numCams; ++i) {
-		//	warpL.copyTo(warpLs[i]);
-		//	warpR.copyTo(warpRs[i]);
-		//}
 	}
 
 	void init(
@@ -264,7 +256,6 @@ struct RenderContext {
 		}
 
 		LOGD("render thread %u is started\n", this_thread::get_id());
-        
 		while (1) {
 			// get render task from input queue
 			LOGD("render thread %u is waiting input task\n", this_thread::get_id());
@@ -473,6 +464,7 @@ CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 	}
 	vector<UMat> chunkDummys;
 	context.renderChunks(imageLs, imageRs, chunks, chunkDummys, motionThreshold);
+	ocl::finish();
 }
 CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 	const std::vector<UMat>& imageLs,
@@ -483,6 +475,7 @@ CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 	RenderContext& context = RenderContext::instance();
 	CV_Assert(context.isStereo && context.isInit());
 	context.renderChunks(imageLs, imageRs, chunkLs, chunkRs, motionThreshold);
+	ocl::finish();
 }
 
 
@@ -587,6 +580,7 @@ CV_EXPORTS_W bool oclInitialize(const OclInitParameters* params) {
 		context.startThreads(numThreads);
 	}
 	oclInitGammaLUT();
+	ocl::finish();
     return true;
 }
 
