@@ -447,8 +447,7 @@ struct OpticalFlow {
 		UMat& flow,
 		DirectionHint hint,
 		float motionThreshhold = 1.0f,
-		float smoothThreshhold = 0.01f
-		) {
+		float smoothThreshhold = 0.01f) {
 
 		CV_Assert(prevFlow.dims == 0 || prevFlow.size() == rgba0byte.size());
 

@@ -8,23 +8,62 @@ namespace cv {
 namespace ocl {
 namespace imvt {
 
+struct OclOptFlowSmooth3Lines {
+	float of_a_x;
+	float of_a_y;
+	float of_b_x;
+	float of_b_y;
+	float of_0a_factor;
+	float of_ab_factor;
+	float of_b1_factor;
+
+	OclOptFlowSmooth3Lines() {};
+	OclOptFlowSmooth3Lines(
+		float of_a_x, float of_a_y, float of_b_x, float of_b_y, 
+		float of_0a_factor, float of_ab_factor, float of_b1_factor) {	
+		this->of_a_x = of_a_x;
+		this->of_a_y = of_a_y;
+		this->of_b_x = of_b_x;
+		this->of_b_y = of_b_y;
+		this->of_0a_factor = of_0a_factor;
+		this->of_ab_factor = of_ab_factor;
+		this->of_b1_factor = of_b1_factor;
+	}
+};
+
+/**
+* @brief The parameters used for initializing OpenCL.
+*/
+struct OclInitParameters {
+	bool isMonoMode = true;
+
+	int  numSideCams;
+	int  numNovelViews;
+	int  camImageWidth;
+
+	Size opticalFlowSize;
+	OclOptFlowSmooth3Lines smooth3LinesFactor;
+
+	float vergeAtInfinitySlabDisplacement = 0.0f;
+	float inputMotionThreshold = 0.0f;
+
+	bool usingBilateralFilter = false;
+	bool computeMotionUsingLpair = true;
+
+	// 
+	// @unnecessary
+	//
+	// bool isOpticalFlow = true;
+	// int outputResolution = 1;
+	// std::string flowAlgName = "pixflow_low";
+};
+
 
 /**
 * @brief Check whether there are proper OpenCL devices available.
 */
 CV_EXPORTS_W bool oclDeviceAvailable();
 
-/**
-* @brief The parameters used for initializing OpenCL.
-*/
-struct OclInitParameters {
-	  bool isStereo = false;
-	  int numCams =-1;
-	  int numNovelViews = -1;
-	  int camImageWidth = -1;
-	  int camImageHeight = -1;
-	  float vergeAtInfinitySlabDisplacement = 0.0f;
-};
 
 /**
 * @brief Initialize OpenCL: check device avaliablity and alloc related resource.

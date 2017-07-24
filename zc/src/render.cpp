@@ -109,7 +109,9 @@ struct RenderContext {
 	// NOTES: 
 	// opticalFlowWidth == overlapWidth
 	// overlapWidth + numNovelViews == camImageWidth
-	int numCams = 0;
+	
+	/* @deprecated
+	int numSideCams = 0;
 	int camImageWidth = 0;
 	int camImageHeight = 0;
 	int numNovelViews = 0;
@@ -117,6 +119,8 @@ struct RenderContext {
 
 	// true for stereo, false for mono
 	bool isStereo = false;
+	*/
+	const OclInitParameters* params = nullptr;
 
 	// for stereo
 	vector<UMat> warpLs;
@@ -131,11 +135,11 @@ struct RenderContext {
 	}
 
 	bool isInit() {
-		return numCams > 0;
+		return params != nullptr;
 	}
 
 	void initMonoWarps(
-		int numCams,
+		int numSideCams,
 		int camImageWidth,
 		int camImageHeight,
 		int numNovelViews) {
@@ -148,14 +152,14 @@ struct RenderContext {
 				warp.at<Point3f>(y, x) = Point3f(slabShift, y, shift);
 			};
 		}
-		warps.assign(numCams, UMat());
-		for (int i = 0; i < numCams; ++i) {
+		warps.assign(numSideCams, UMat());
+		for (int i = 0; i < numSideCams; ++i) {
 			warp.copyTo(warps[i]);
 		}
 	}
 
 	void initStereoWarps(
-		int numCams,
+		int numSideCams,
 		int camImageWidth,
 		int camImageHeight, 
 		int numNovelViews, 
@@ -175,36 +179,32 @@ struct RenderContext {
 		UMat uwarpR;
 		warpL.copyTo(uwarpL);
 		warpR.copyTo(uwarpR);
-		warpLs.assign(numCams, uwarpL);
-		warpRs.assign(numCams, uwarpR);
+		warpLs.assign(numSideCams, uwarpL);
+		warpRs.assign(numSideCams, uwarpR);
 	}
 
-	void init(
-		bool isStereo,
-		int numCams,
-		int camImageWidth,
-		int camImageHeight,
-		int numNovelViews,
-		float vergeAtInfinitySlabDisplacement) {
-
-		if (isStereo) {
-			initStereoWarps(numCams, camImageWidth, camImageHeight, numNovelViews, vergeAtInfinitySlabDisplacement);
+	void init(const OclInitParameters* initParams) {
+		params = initParams;
+		if (params->isMonoMode) {
+			initMonoWarps(
+				params->numSideCams, 
+				params->camImageWidth, 
+				params->opticalFlowSize.height, 
+				params->numNovelViews);
 		} else {
-			initMonoWarps(numCams, camImageWidth, camImageHeight, numNovelViews);
+			initStereoWarps(
+				params->numSideCams,
+				params->camImageWidth,
+				params->opticalFlowSize.height,
+				params->numNovelViews,
+				params->vergeAtInfinitySlabDisplacement);
 		}
-
-		preImageLs.assign(numCams, UMat());
-		preImageRs.assign(numCams, UMat());
-		preFlowLtoRs.assign(numCams, UMat());
-		preFlowRtoLs.assign(numCams, UMat());
-
-		this->isStereo = isStereo;
-		this->numCams = numCams;
-		this->camImageHeight = camImageHeight;
-		this->camImageWidth = camImageWidth;
-		this->numNovelViews = numNovelViews;
-		this->vergeAtInfinitySlabDisplacement = vergeAtInfinitySlabDisplacement;
+		preImageLs.assign(params->numSideCams, UMat());
+		preImageRs.assign(params->numSideCams, UMat());
+		preFlowLtoRs.assign(params->numSideCams, UMat());
+		preFlowRtoLs.assign(params->numSideCams, UMat());
 	}
+
 
 	void release() {
 		preImageLs.clear();
@@ -216,19 +216,14 @@ struct RenderContext {
 		warpLs.clear();
 		warpRs.clear();
 
-		isStereo = false;
-		numCams = 0;
-		camImageHeight = 0;
-		camImageWidth = 0;
-		numNovelViews = 0;
-		vergeAtInfinitySlabDisplacement = 0.0f;
+		params = nullptr;
 	}
 
 	void resetPrevious() {
-		preImageLs.assign(numCams, UMat());
-		preImageRs.assign(numCams, UMat());
-		preFlowLtoRs.assign(numCams, UMat());
-		preFlowRtoLs.assign(numCams, UMat());
+		preImageLs.assign(params->numSideCams, UMat());
+		preImageRs.assign(params->numSideCams, UMat());
+		preFlowLtoRs.assign(params->numSideCams, UMat());
+		preFlowRtoLs.assign(params->numSideCams, UMat());
 	}
 
     void startThreads(int numThreads = 4) {
@@ -279,7 +274,6 @@ struct RenderContext {
 				flowLtoR,
 				DirectionHint::LEFT,
 				t.motionThreshold);
-
 			oclComputeOpticalFlow(
 				*(t.imageR),
 				*(t.imageL),
@@ -291,7 +285,15 @@ struct RenderContext {
 				t.motionThreshold);
 
 			// combine novel views
-			if (c->isStereo) {
+			if (c->params->isMonoMode) {
+				oclCombineNovelViews(
+					c->warps[t.index],
+					*(t.imageL),
+					*(t.imageR),
+					flowLtoR,
+					flowRtoL,
+					*(t.chunkL));
+			} else {
 				oclCombineNovelViews(
 					c->warpLs[t.index],
 					c->warpRs[t.index],
@@ -301,14 +303,6 @@ struct RenderContext {
 					flowRtoL,
 					*(t.chunkL),
 					*(t.chunkR));
-			} else {
-				oclCombineNovelViews(
-					c->warps[t.index],
-					*(t.imageL),
-					*(t.imageR),
-					flowLtoR,
-					flowRtoL,
-					*(t.chunkL));
 			}
 
 			// save previous images/flows
@@ -356,7 +350,15 @@ struct RenderContext {
 			motionThreshold);
 
 		// combine novel views
-		if (isStereo) {
+		if (params->isMonoMode) {
+			oclCombineNovelViews(
+				warps[index],
+				imageL,
+				imageR,
+				flowLtoR,
+				flowRtoL,
+				chunkL);
+		} else {
 			oclCombineNovelViews(
 				warpLs[index],
 				warpRs[index],
@@ -366,14 +368,6 @@ struct RenderContext {
 				flowRtoL,
 				chunkL,
 				chunkR);
-		} else {
-			oclCombineNovelViews(
-				warps[index],
-				imageL,
-				imageR,
-				flowLtoR,
-				flowRtoL,
-				chunkL);
 		}
 
 		// save previous images/flows
@@ -451,21 +445,20 @@ static void releaseBufferPool() {
 	}
 }
 
-
 CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 	const vector<UMat>& imageLs,
 	const vector<UMat>& imageRs,
 	vector<UMat>& chunks,
 	float motionThreshold) {
 	RenderContext& context = RenderContext::instance();
-	if (!context.isInit()) {
-		context.init(false, imageLs.size(), 2 * imageLs[0].cols , imageLs[0].rows, imageLs[0].cols, 0.0f);
-		context.startThreads();
-	}
+	CV_Assert(context.params->isMonoMode && context.isInit());
 	vector<UMat> chunkDummys;
 	context.renderChunks(imageLs, imageRs, chunks, chunkDummys, motionThreshold);
 	ocl::finish();
 }
+
+
+
 CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 	const std::vector<UMat>& imageLs,
 	const std::vector<UMat>& imageRs,
@@ -473,7 +466,7 @@ CV_EXPORTS_W void oclRenderStereoPanoramaChunks(
 	std::vector<UMat>& chunkRs,
 	float motionThreshold) {
 	RenderContext& context = RenderContext::instance();
-	CV_Assert(context.isStereo && context.isInit());
+	CV_Assert(!context.params->isMonoMode && context.isInit());
 	context.renderChunks(imageLs, imageRs, chunkLs, chunkRs, motionThreshold);
 	ocl::finish();
 }
@@ -555,30 +548,27 @@ CV_EXPORTS_W bool oclInitialize(const OclInitParameters* params) {
 	size_t maxBufferPoolSize = ocl::Device::getDefault().globalMemSize();
 	setBufferPoolSize(maxBufferPoolSize);
 
-	if (params) {
-		// pre-alloc buffers and warm up
-		int numThreads = 4;
-		bool succeed = oclInitBuffers(
-			params->numCams,
-			Size(params->camImageWidth - params->numNovelViews, params->camImageHeight),
-			Size(params->numNovelViews, params->camImageHeight),
-			numThreads);
-		if (!succeed) {
-			return false;
-		}
-		releaseBufferPool();
+	CV_Assert(params != nullptr);
+	//
+	// TODO: check params validation
+	//
 
-		// TODO: check the init parameters
-		RenderContext& context = RenderContext::instance();
-		context.init(
-			params->isStereo,
-			params->numCams,
-			params->camImageWidth,
-			params->camImageHeight,
-			params->numNovelViews,
-			params->vergeAtInfinitySlabDisplacement);
-		context.startThreads(numThreads);
+	// pre-alloc buffers and warm up
+	int numThreads = 4;
+	bool succeed = oclInitBuffers(
+		params->numSideCams,
+		params->opticalFlowSize,
+		Size(params->numNovelViews, params->opticalFlowSize.height),
+		numThreads);
+	if (!succeed) {
+		return false;
 	}
+	releaseBufferPool();
+
+	// start render
+	RenderContext& context = RenderContext::instance();
+	context.init(params);
+	context.startThreads(numThreads);
 	oclInitGammaLUT();
 	ocl::finish();
     return true;
