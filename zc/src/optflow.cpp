@@ -123,6 +123,24 @@ CV_EXPORTS_W void oclAdjustFlowTowardPreviousV2(const UMat& prevFlow, const UMat
     k.run(2, globalsize, localsize, false);
 }
 
+CV_EXPORTS_W void oclAdjustFlowTowardPreviousV3(const UMat& prevFlow, const UMat& motion, UMat& flow, const OclOptFlowSmooth3Lines& factor) {
+	ocl::Kernel k("adjust_flow_toward_previous_v3", ocl::oclrenderpano::optflow_oclsrc);
+	k.args(ocl::KernelArg::ReadWrite(flow),
+		ocl::KernelArg::ReadOnlyNoSize(prevFlow),
+		ocl::KernelArg::ReadOnlyNoSize(motion),
+		ocl::KernelArg::Constant(&factor.of_a_x, sizeof(factor.of_a_x)),
+		ocl::KernelArg::Constant(&factor.of_a_y, sizeof(factor.of_a_y)),
+		ocl::KernelArg::Constant(&factor.of_b_x, sizeof(factor.of_b_x)),
+		ocl::KernelArg::Constant(&factor.of_b_y, sizeof(factor.of_b_y)),
+		ocl::KernelArg::Constant(&factor.of_0a_factor, sizeof(factor.of_0a_factor)),
+		ocl::KernelArg::Constant(&factor.of_ab_factor, sizeof(factor.of_ab_factor)),
+		ocl::KernelArg::Constant(&factor.of_b1_factor, sizeof(factor.of_b1_factor)));
+	size_t globalsize[] = { flow.cols, flow.rows };
+	size_t localsize[] = { 16, 16 };
+	k.run(2, globalsize, localsize, false);
+}
+
+
 // estimate the flow of each pixel in I0 by searching a rectangle
 CV_EXPORTS_W void oclEstimateFlow(const UMat& I0, const UMat& I1, const UMat& alpha0, const UMat& alpha1, UMat& flow, const Rect& box) {
     ocl::Kernel k("estimate_flow", ocl::oclrenderpano::optflow_oclsrc);
@@ -446,9 +464,10 @@ struct OpticalFlow {
 		const UMat& prevI1BGRA,
 		UMat& flow,
 		DirectionHint hint,
-		float motionThreshhold = 1.0f,
-		float smoothThreshhold = 0.01f) {
-
+		float motionThreshhold,
+		const OclInitParameters* params) {
+		
+		CV_Assert(params != nullptr);
 		CV_Assert(prevFlow.dims == 0 || prevFlow.size() == rgba0byte.size());
 
 		// @added
@@ -491,11 +510,8 @@ struct OpticalFlow {
 			oclResize(prevI1BGRA, prevI1BGRADownscaled, downscaleSize);
 
 			// @changed
-			oclSmoothImage(rgba0byteDownscaled, prevI0BGRADownscaled, smoothThreshhold, true);
-			oclSmoothImage(rgba1byteDownscaled, prevI1BGRADownscaled, smoothThreshhold, true);
-
-			// @added
-			motion.create(downscaleSize, CV_32F);
+			oclSmoothImageV2(rgba0byteDownscaled, prevI0BGRADownscaled, params->inputMotionThreshold, true);
+			oclSmoothImageV2(rgba1byteDownscaled, prevI1BGRADownscaled, params->inputMotionThreshold, true);
 
 			// do motion detection vs. previous frame's images
 			/* @deleted
@@ -508,7 +524,16 @@ struct OpticalFlow {
 				}
 			}
 			*/
-			oclMotionDetectionV2(rgba1byteDownscaled, prevI1BGRADownscaled, motion);
+
+			/* @changed */
+			motion.create(downscaleSize, CV_32F);
+			if (params->computeMotionUsingLpair) {
+				oclMotionDetectionV2(rgba0byteDownscaled, prevI0BGRADownscaled, motion);
+			} else {
+				oclMotionDetectionV2(rgba1byteDownscaled, prevI1BGRADownscaled, motion);
+			}
+
+			
 			/* @optimized */
 			prevI0BGRADownscaled = UMat();
 			prevI1BGRADownscaled = UMat();
@@ -602,7 +627,8 @@ struct OpticalFlow {
 				/* @deleted
 				adjustFlowTowardPrevious(prevFlowPyramid[level], motionPyramid[level], flow);
 				*/
-				oclAdjustFlowTowardPreviousV2(prevFlowPyramid[level], motionPyramid[level], flow, motionThreshhold);
+				//oclAdjustFlowTowardPreviousV2(prevFlowPyramid[level], motionPyramid[level], flow, motionThreshhold);
+				oclAdjustFlowTowardPreviousV3(prevFlowPyramid[level], motionPyramid[level], flow, params->smooth3LinesFactor);
 
 				/* @optimized */ 
 				prevFlowPyramid[level] = UMat();
@@ -661,7 +687,7 @@ struct OpticalFlow {
     // patch_index is used only for testing 
 	void patchMatchPropagationAndSearch(
 		UMat& I0,
-		UMat& I1,
+		UMat& I1, 
 		UMat& alpha0,
 		UMat& alpha1,
 		UMat& flow,
@@ -924,8 +950,9 @@ CV_EXPORTS_W void oclComputeOpticalFlow(
     const UMat& prevI1BGRA,
     UMat& flow,
     DirectionHint hint,
-	float motionThreshhold) {
-	OpticalFlow().computeOpticalFlow(I0BGRA, I1BGRA, prevFlow, prevI0BGRA, prevI1BGRA, flow, hint, motionThreshhold);
+	float motionThreshhold,
+	const OclInitParameters* params) {
+	OpticalFlow().computeOpticalFlow(I0BGRA, I1BGRA, prevFlow, prevI0BGRA, prevI1BGRA, flow, hint, motionThreshhold, params);
 	ocl::finish();
 }
 

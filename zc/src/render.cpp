@@ -74,24 +74,6 @@ struct RenderTask {
     float motionThreshold;
 };
 
-
-// @deprecated This is only a "rough estimate", should be refined after experiments.  
-static size_t calcThreadCount(int numCams, Size imgSize) {
-	if (numCams > 4) {
-		numCams = 4;
-	}
-	size_t bufferPoolSize = ocl::Device::getDefault().globalMemSize() >> 20;
-	size_t frameSize = (numCams* imgSize.width * imgSize.height * 4) >> 20;
-	size_t ration = bufferPoolSize / frameSize;
-	if (ration > 128) {
-		return 4;
-	}
-	if (ration > 64) {
-		return 2;
-	}
-	return 1;
-}
-
 struct RenderContext {
 
 	// render tasks/threads
@@ -104,22 +86,8 @@ struct RenderContext {
 	vector<UMat> preImageRs;
 	vector<UMat> preFlowLtoRs;
 	vector<UMat> preFlowRtoLs;
-
-	// for both stereo and mono
-	// NOTES: 
-	// opticalFlowWidth == overlapWidth
-	// overlapWidth + numNovelViews == camImageWidth
 	
-	/* @deprecated
-	int numSideCams = 0;
-	int camImageWidth = 0;
-	int camImageHeight = 0;
-	int numNovelViews = 0;
-	float vergeAtInfinitySlabDisplacement = 0.0f;
-
-	// true for stereo, false for mono
-	bool isStereo = false;
-	*/
+	// init params
 	const OclInitParameters* params = nullptr;
 
 	// for stereo
@@ -184,7 +152,8 @@ struct RenderContext {
 	}
 
 	void init(const OclInitParameters* initParams) {
-		params = initParams;
+		params = new OclInitParameters;
+		memcpy((void*)params, initParams, sizeof(OclInitParameters));
 		if (params->isMonoMode) {
 			initMonoWarps(
 				params->numSideCams, 
@@ -216,6 +185,7 @@ struct RenderContext {
 		warpLs.clear();
 		warpRs.clear();
 
+		delete params;
 		params = nullptr;
 	}
 
@@ -273,7 +243,8 @@ struct RenderContext {
 				c->preImageRs[t.index],
 				flowLtoR,
 				DirectionHint::LEFT,
-				t.motionThreshold);
+				t.motionThreshold,
+				c->params);
 			oclComputeOpticalFlow(
 				*(t.imageR),
 				*(t.imageL),
@@ -282,7 +253,8 @@ struct RenderContext {
 				c->preImageLs[t.index],
 				flowRtoL,
 				DirectionHint::RIGHT,
-				t.motionThreshold);
+				t.motionThreshold,
+				c->params);
 
 			// combine novel views
 			if (c->params->isMonoMode) {
@@ -338,7 +310,9 @@ struct RenderContext {
 			preImageRs[index],
 			flowLtoR,
 			DirectionHint::LEFT,
-			motionThreshold);
+			motionThreshold,
+			params);
+
 		oclComputeOpticalFlow(
 			imageR,
 			imageL,
@@ -347,7 +321,8 @@ struct RenderContext {
 			preImageLs[index],
 			flowRtoL,
 			DirectionHint::RIGHT,
-			motionThreshold);
+			motionThreshold,
+			params);
 
 		// combine novel views
 		if (params->isMonoMode) {
@@ -552,7 +527,6 @@ CV_EXPORTS_W bool oclInitialize(const OclInitParameters* params) {
 	//
 	// TODO: check params validation
 	//
-
 	// pre-alloc buffers and warm up
 	int numThreads = 4;
 	bool succeed = oclInitBuffers(
@@ -582,7 +556,6 @@ CV_EXPORTS_W void oclRelease() {
 	releaseBufferPool();
 	ocl::finish();
 }
-
 
 
 

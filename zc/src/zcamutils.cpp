@@ -84,6 +84,25 @@ CV_EXPORTS_W void oclSmoothImage(UMat& pano, const UMat& previous, float thresh_
 	}
 }
 
+CV_EXPORTS_W void oclSmoothImageV2(UMat& pano, const UMat& previous, float thresh_hold, bool isPano) {
+	if (pano.dims != previous.dims) {
+		return;
+	}
+	if (previous.cols != 0) {
+		CV_Assert(pano.type() == CV_8UC4 || pano.type() == previous.type());
+		int is_pano = isPano ? 1 : 0;
+		ocl::Kernel k("smooth_image", ocl::oclrenderpano::zcamutils_oclsrc);
+		k.args(ocl::KernelArg::ReadWrite(pano),
+			ocl::KernelArg::ReadOnlyNoSize(previous),
+			ocl::KernelArg::Constant(&thresh_hold, sizeof(thresh_hold)),
+			ocl::KernelArg::Constant(&is_pano, sizeof(is_pano)));
+		size_t globalsize[] = { pano.cols, pano.rows };
+		size_t localsize[] = { 16, 16 };
+		k.run(2, globalsize, localsize, false);
+	}
+}
+
+
 CV_EXPORTS_W void oclSharpImage(UMat& sphericalImage, float factor) {
 	if (factor != 0.0) {
 		UMat blured;
@@ -111,7 +130,22 @@ CV_EXPORTS_W void oclStackHorizontal(const std::vector<UMat>& srcImages, UMat& d
 	ocl::finish();
 }
 
+CV_EXPORTS_W void oclStackVertical(const std::vector<UMat>& srcImages, UMat& dstImage) {
+	int totalRows = 0;
+	for (size_t i = 0; i < srcImages.size(); i++) {
+		CV_Assert(srcImages[i].dims <= 2 && srcImages[i].cols == srcImages[0].cols && srcImages[i].type() == srcImages[0].type());
+		totalRows += srcImages[i].rows;
+	}
 
+	int rows = 0;
+	dstImage.create(totalRows, srcImages[0].cols, srcImages[0].type());
+	for (size_t i = 0; i < srcImages.size(); i++) {
+		UMat dpart = dstImage(Rect(0, rows, srcImages[i].cols, srcImages[i].rows));
+		srcImages[i].copyTo(dpart);
+		rows += srcImages[i].rows;
+	}
+	ocl::finish();
+}
 
 CV_EXPORTS_W void oclOffsetHorizontalWrap(const UMat& srcImage, float offset, UMat& dstImage) {
 	// get warp mat

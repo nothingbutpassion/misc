@@ -40,7 +40,9 @@ the use of this software, even if advised of the possibility of such damage.
 #ifndef __OPENCV_OCL_OPTFLOW_HPP__
 #define __OPENCV_OCL_OPTFLOW_HPP__
 
+
 #include "opencv2/core.hpp"
+#include "opencv2/oclrenderpano.hpp"
 
 namespace cv {
 namespace ocl {
@@ -75,6 +77,7 @@ CV_EXPORTS_W void oclSweepFromBottom(
 	const UMat& I1x, const UMat& I1y, const UMat&  blurredFlow, UMat& flow);
 CV_EXPORTS_W void oclGaussianBlur(const UMat& src, UMat& dst, Size ksize, double sigma);
 CV_EXPORTS_W void oclGaussianBlurV2(const UMat& src, UMat& dst, Size ksize, double sigma, UMat& tmp = UMat());
+CV_EXPORTS_W void oclSmoothImageV2(UMat& pano, const UMat& previous, float thresh_hold, bool isPano);
 
 enum class DirectionHint {
 	UNKNOWN,
@@ -91,7 +94,8 @@ CV_EXPORTS_W void oclComputeOpticalFlow(
 	const UMat& prevI1BGRA,
 	UMat& flow,
 	DirectionHint hint,
-	float motionThreshhold = 1.0f);
+	float motionThreshhold = 1.0f,
+	const OclInitParameters* params = nullptr);
 
 }	// namespace imvt
 }	// namespace ocl

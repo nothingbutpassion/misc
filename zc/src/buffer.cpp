@@ -2,7 +2,7 @@
 #include "opencv2/oclrenderpano.hpp"
 
 
-#if 1
+#if 0
 #define LOGD printf
 #else
 #define LOGD(...)
@@ -275,6 +275,10 @@ CV_EXPORTS_W bool oclInitBuffers(int nCams, Size optSize, Size nvSize, int& numT
 
 	oclOffsetHorizontalWrap(panoL, 150);
 	oclOffsetHorizontalWrap(panoR, -150);
+
+	UMat pano;
+	vector<UMat> panos = { panoL, panoR };
+	oclStackHorizontal(panos, pano);
 	}
 	ocl::finish();
 	size_t otherSize = getReservedBufferSize();

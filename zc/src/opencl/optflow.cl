@@ -109,15 +109,74 @@ __kernel void adjust_flow_toward_previous_v2(
 		}
 		float w = 1.0f - flowMotion;
 		wmat2(cur, x, y) = (1.0f - w) * rmat2(cur, x, y) + w * rmat2(pre, x, y);
-		/* @optimized
-		const float top_bottom_thresh = 0.2f;
-		float flowMotion = rmat(motion, x, y);
-		if (y < cur_rows * top_bottom_thresh || y > cur_rows* (1 - top_bottom_thresh) || flowMotion <= motion_threshhold) {
-			wmat2(cur, x, y)  = flowMotion * rmat2(cur, x, y)  + (1 - flowMotion) * rmat2(pre, x, y);
-		}
-		*/
 	}
 }
+
+
+/*
+	float flowMotion = ((float*)((char*)motion.data + y * motion.step))[x];
+	float2 flowValue = ((float2*)((char*)flow.data + y * flow.step))[x];
+	float2 prevFlowValue = ((float2*)((char*)prevFlow.data + y * prevFlow.step))[x];
+
+	float adjust_factor = 0.0;
+	if (flowMotion < factor.of_a_x && flowMotion > 0) {
+		adjust_factor = flowMotion * factor.of_a_y / factor.of_a_x;
+		adjust_factor = adjust_factor * factor.of_0a_factor;
+	}
+	else if (flowMotion >= factor.of_a_x && flowMotion < factor.of_b_x && (factor.of_b_x - factor.of_a_x) != 0) {
+		adjust_factor = factor.of_a_y + (flowMotion - factor.of_a_x)  * (factor.of_b_y - factor.of_a_y) / (factor.of_b_x - factor.of_a_x);
+		adjust_factor = adjust_factor* factor.of_ab_factor;
+	}
+	else if (flowMotion >= factor.of_b_x) {
+		adjust_factor = factor.of_b_y + (flowMotion - factor.of_b_x)  * (1 - factor.of_b_y) / (1 - factor.of_b_x);
+		adjust_factor = adjust_factor* factor.of_b1_factor;
+	}
+	if (adjust_factor > 1.0) {
+		adjust_factor = 1.0;
+	}
+
+	flow(y, x) = make_float2(flowValue.x * adjust_factor + prevFlowValue.x * (1 - adjust_factor), flowValue.y * adjust_factor + prevFlowValue.y * (1 - adjust_factor));
+*/		
+__kernel void adjust_flow_toward_previous_v3(
+	__global float2* cur, int cur_step, int cur_offset, int cur_rows, int cur_cols,
+	__global const float2* pre, int pre_step, int pre_offset,
+	__global const float* motion, int motion_step, int motion_offset,
+	float of_a_x,
+	float of_a_y,
+	float of_b_x,
+	float of_b_y,
+	float of_0a_factor,
+	float of_ab_factor,
+	float of_b1_factor) 
+{
+	int x = get_global_id(0);
+	int y = get_global_id(1);
+
+	if (x < cur_cols && y < cur_rows) {
+		float flowMotion = rmat(motion, x, y);
+		
+		float adjust_factor = 0.0f;
+		if (flowMotion < of_a_x && flowMotion > 0) {
+			adjust_factor = flowMotion * of_a_y / of_a_x;
+			adjust_factor = adjust_factor * of_0a_factor;
+		}
+		else if (flowMotion >= of_a_x && flowMotion < of_b_x && (of_b_x - of_a_x) != 0) {
+			adjust_factor = of_a_y + (flowMotion - of_a_x)  * (of_b_y - of_a_y) / (of_b_x - of_a_x);
+			adjust_factor = adjust_factor * of_ab_factor;
+		}
+		else if (flowMotion >= of_b_x) {
+			adjust_factor = of_b_y + (flowMotion - of_b_x)  * (1.0f - of_b_y) / (1.0f - of_b_x);
+			adjust_factor = adjust_factor * of_b1_factor;
+		}
+		if (adjust_factor > 1.0f) {
+			adjust_factor = 1.0f;
+		}
+		
+		wmat2(cur, x, y) = adjust_factor * rmat2(cur, x, y) + (1.0f - adjust_factor) * rmat2(pre, x, y);
+	}
+}
+
+
 
 /**
  * @brief the follwoing constants must be same as the ones defined in host program

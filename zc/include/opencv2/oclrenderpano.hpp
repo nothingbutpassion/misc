@@ -46,7 +46,6 @@ struct OclInitParameters {
 
 	float vergeAtInfinitySlabDisplacement = 0.0f;
 	float inputMotionThreshold = 0.0f;
-
 	bool usingBilateralFilter = false;
 	bool computeMotionUsingLpair = true;
 
@@ -153,6 +152,16 @@ CV_EXPORTS_W void oclStackHorizontal(
 	const std::vector<UMat>& srcImages,
 	UMat& dstImage);
 
+
+/**
+* @brief Applies vertical concatenation to given matrices.
+*
+* @param srcImages	input array or vector of matrices. all of the matrices must have the same number of rows and the same depth (CV_8UC4).
+* @param dstImage	output array. It has the same number of rows and depth as the src, and the sum of cols of the src.
+*/
+CV_EXPORTS_W void oclStackVertical(
+	const std::vector<UMat>& srcImages,
+	UMat& dstImage);
 
 
 /**
