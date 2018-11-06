@@ -52,8 +52,8 @@ static void on_mouse(int event, int x, int y, int flags, void* userdata) {
 
 void panoViewer(const string& pano_file) {
 	ProjectArgument pa;
-	namedWindow("plane");
-	setMouseCallback("plane", on_mouse, &pa);
+	namedWindow("PanoViewer", WINDOW_FREERATIO|WINDOW_NORMAL);
+	setMouseCallback("PanoViewer", on_mouse, &pa);
 
 	Mat pano = imread(pano_file);
 	Mat plane(pano.rows / 2, pano.cols / 3, pano.type());
@@ -62,7 +62,7 @@ void panoViewer(const string& pano_file) {
 		sphere_projection(pano, plane, pa.theta, pa.phi, pa.fov_x, pa.fov_y);
 		double fps = cv::getTickFrequency() / (cv::getCPUTickCount() - start);
 		printf("\rcpu fps: %f", fps);
-		imshow("plane", plane);
+		imshow("PanoViewer", plane);
 	} while (waitKey(10) == -1);
 }
 

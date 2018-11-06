@@ -40,9 +40,10 @@ else()
 	target_link_libraries(pano_test ${OpenCV_LIBS})
 endif()
 
-if(MSVC)
+if (MSVC)
 	set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 else()
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 	set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE})
 endif()
 
