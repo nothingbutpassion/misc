@@ -15,19 +15,30 @@ message("OpenCV_INCLUDE_DIRS: ${OpenCV_INCLUDE_DIRS}")
 
 find_path(OpenCL_INCLUDE_DIRS 
     NAMES OpenCL/cl.h CL/cl.h
-    HINTS $ENV{AMDAPPSDKROOT}/include)
-find_library(OpenCL_LIBRARIES
+    HINTS $ENV{OpenCL_DIR}/include)
+find_library(OpenCL_LIBS
 	NAMES OpenCL
-	HINTS $ENV{AMDAPPSDKROOT}/lib/x86_64)	
+	HINTS $ENV{OpenCL_DIR}/lib)	
 message("OpenCL_INCLUDE_DIRS: ${OpenCL_INCLUDE_DIRS}")
-message("OpenCL_LIBRARIES: ${OpenCL_LIBRARIES}")
+message("OpenCL_LIBS: ${OpenCL_LIBS}")
 	
-add_executable(pano_test
-	pano_test.cpp 
-	utils.cpp 
-	ocl_utils.cpp)
-include_directories(${OpenCV_INCLUDE_DIRS} ${OpenCL_INCLUDE_DIRS})
-target_link_libraries(pano_test ${OpenCV_LIBS} ${OpenCL_LIBRARIES})
+
+
+if (OpenCL_INCLUDE_DIRS AND OpenCL_LIBS)
+    add_executable(pano_test
+        pano_test.cpp
+        utils.cpp
+        ocl_utils.cpp)
+	include_directories(${OpenCV_INCLUDE_DIRS} ${OpenCL_INCLUDE_DIRS})
+    target_compile_definitions(pano_test -DUSE_OPENCL)
+	target_link_libraries(pano_test ${OpenCV_LIBS} ${OpenCL_LIBS})
+else()
+    add_executable(pano_test
+        pano_test.cpp
+        utils.cpp)
+	include_directories(${OpenCV_INCLUDE_DIRS})
+	target_link_libraries(pano_test ${OpenCV_LIBS})
+endif()
 
 if(MSVC)
 	set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin)
@@ -37,6 +48,4 @@ endif()
 
 add_custom_command(
 	TARGET pano_test POST_BUILD
-	COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/sum.cl ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR} 
-	COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/plane_to_sphere_map.cl ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR}
-	)
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/plane_to_sphere_map.cl ${EXECUTABLE_OUTPUT_PATH}/${CMAKE_CFG_INTDIR})

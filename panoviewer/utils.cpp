@@ -1,4 +1,4 @@
-#include <Windows.h>
+
 #include <math.h>
 
 #include "opencv2/core.hpp"
@@ -6,7 +6,13 @@
 #include "opencv2/core/ocl.hpp"
 
 #include "utils.h"
+#ifdef USE_OPENCL
 #include "ocl_utils.h"
+#endif
+
+#ifdef WIN32
+#include <Windows.h>
+#endif
 
 using namespace std;
 using namespace cv;
@@ -51,10 +57,11 @@ void sphere_projection(const Mat& pano, Mat& plane, double theta, double phi, do
 			map.at<Point2f>(y, x) = Point2f(p.x, p.y);
 		}
 	}
-	remap(pano, plane, map, Mat(), CV_INTER_CUBIC, BORDER_REPLICATE);
+	remap(pano, plane, map, Mat(), INTER_CUBIC, BORDER_REPLICATE);
 }
 
 string get_executable_dir() {
+#ifdef WIN32
 	HMODULE hModule = GetModuleHandle(NULL);
 	char path[MAX_PATH];
 	GetModuleFileName(hModule, path, MAX_PATH);
@@ -63,8 +70,11 @@ string get_executable_dir() {
 	if (pos != string::npos) {
 		return pathstr.substr(0, pos);
 	}
-	return string();
+#endif
+	return ".";
 }
+
+#ifdef USE_OPENCL
 
 // NOTES: should call initOpenCL() first and releaseOpenCL when no longer used
 void sphere_projection(const UMat& pano, UMat& plane, double theta, double phi, double fov_x, double fov_y) {
@@ -75,9 +85,7 @@ void sphere_projection(const UMat& pano, UMat& plane, double theta, double phi, 
 		(cl_command_queue)ocl::Queue::getDefault().ptr());
 
 	// NOTES: kernel/program should be released
-	//static cl_program program = buildProgram("C:\\Users\\Administrator\\Downloads\\MyTesting\\PanoTest\\plane_to_sphere_map.cl");
-
-	static cl_program program = buildProgram(get_executable_dir() + "\\plane_to_sphere_map.cl");
+	static cl_program program = buildProgram(get_executable_dir() + "/plane_to_sphere_map.cl");
 	static cl_kernel kernel = createKernel(program, "plane_to_sphere_map");
 
 	UMat map(plane.size(), CV_32FC2);
@@ -121,3 +129,5 @@ void sphere_projection(const UMat& pano, UMat& plane, double theta, double phi, 
 	remap(pano, plane, map, UMat(), CV_INTER_CUBIC, BORDER_REPLICATE);
 	ocl::finish();
 }
+
+#endif
