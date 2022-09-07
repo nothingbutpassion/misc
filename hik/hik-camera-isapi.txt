@@ -1,0 +1,385 @@
+HIKVISON DS-2CD3Q10FD-IW IP Camera ISAPI
+
+NOTICE: ISAPI(and others: PSIA/Onvif/CGI) can be got from offical websit: http://www1.hikvision.com/cn/download_more_969.html
+
+After capturing the web brower's HTTP requests/response to/from the HIK IP camera, I found  
+some ISAPI(HTTP requests/response) can be used to set/get some properties of the camera device. 
+These ISAPI contans:
+
+1. Time ISAPI
+===================
+1) get time
+2) set ntp server
+3) test ntp server
+
+2. Record ISAPI
+=================== 
+1) set record plan
+2) search records
+3) download record
+
+3. Storage ISAPI
+===================
+1) get storage info
+2) get hdd capabilities
+3) get nas info
+4) set nas info
+5) get quota info
+6) set quota info
+
+The following are the detail ISAPI, each function is represented by a example. 
+Each example has the following format:
+
+<http-Method> <url>
+
+[http-body]
+---------------------------------------------------------------------------------------------------
+<http-response-body>
+
+
+1. Time API
+===================================================================================================
+1) get time
+
+GET http://10.69.3.129/ISAPI/System/time
+---------------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+	<Time version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<timeMode>NTP</timeMode>
+	<localTime>2015-10-10T10:54:41+08:00</localTime>
+	<timeZone>CST-8:00:00</timeZone>
+</Time>
+
+
+2) set ntp server
+
+PUT http://10.69.3.129/ISAPI/System/time/ntpServers/1
+
+<?xml version="1.0" encoding="utf-8"?>
+<NTPServer>
+	<id>1</id>
+	<addressingFormatType>hostname</addressingFormatType>
+	<hostName>pool.ntp.org</hostName>
+	<portNo>123</portNo>
+	<synchronizeInterval>1440</synchronizeInterval>
+</NTPServer>
+---------------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<ResponseStatus version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<requestURL>/ISAPI/System/time/ntpServers/1</requestURL>
+	<statusCode>1</statusCode>
+	<statusString>OK</statusString>
+	<subStatusCode>ok</subStatusCode>
+</ResponseStatus>
+
+
+3) test ntp server
+
+POST http://10.69.3.129/ISAPI/System/time/ntpServers/test
+
+<?xml version="1.0" encoding="UTF-8"?>
+<NTPTestDescription>
+	<addressingFormatType>hostname</addressingFormatType>
+	<hostName>pool.ntp.org</hostName>
+	<portNo>123</portNo>
+</NTPTestDescription>
+---------------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<NTPTestResult version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<errorCode>0</errorCode>
+	<errorDescription>ok</errorDescription>
+</NTPTestResult>
+
+
+2. Record API
+===================================================================================================
+1) set record plan
+
+PUT http://10.69.3.129/ISAPI/ContentMgmt/record/tracks/101
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Track version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<id>101</id>
+	<Channel>101</Channel>
+	<Enable>true</Enable>
+	<Description>trackType=standard,trackType=video,codecType=H.264-BP,resolution=1280x720,framerate=1.960000 fps,bitrate=2048 kbps</Description>
+	<TrackGUID>e32e6863-ea5e-4ee4-997e-c42f90727eb3</TrackGUID>
+	<Duration>P30DT0H</Duration>
+	<DefaultRecordingMode>CMR</DefaultRecordingMode>
+	<LoopEnable>false</LoopEnable>
+	<SrcDescriptor>
+		<SrcGUID>e32e6863-ea5e-4ee4-997e-c42f90727eb3</SrcGUID>
+		<SrcChannel>1</SrcChannel>
+		<StreamHint>trackType=standard,trackType=video,codecType=H.264-BP,resolution=1280x720,framerate=1.960000 fps,bitrate=2048 kbps</StreamHint>
+		<SrcDriver>RTSP</SrcDriver>
+		<SrcType>H.264-BP</SrcType>
+		<SrcUrl>rtsp://localhost/PSIA/Streaming/channels/101</SrcUrl>
+		<SrcType>DESCRIBE, SETUP, PLAY, TEARDOWN</SrcType>
+		<SrcLogin>admin</SrcLogin>
+	</SrcDescriptor>
+	<TrackSchedule xmlns="">
+		<ScheduleBlock>
+			<ScheduleBlockGUID>{00000000-0000-0000-0000-000000000000}</ScheduleBlockGUID>
+			<ScheduleBlockType>www.std-cgi.com/racm/schedule/ver10</ScheduleBlockType>
+			<ScheduleAction>
+				<id>1</id>
+				<ScheduleActionStartTime>
+					<DayOfWeek>Monday</DayOfWeek>
+					<TimeOfDay>00:00:00</TimeOfDay>
+				</ScheduleActionStartTime>
+				<ScheduleActionEndTime>
+					<DayOfWeek>Monday</DayOfWeek>
+					<TimeOfDay>08:00:00</TimeOfDay>
+				</ScheduleActionEndTime>
+				<ScheduleDSTEnable>false</ScheduleDSTEnable>
+				<Description>nothing</Description>
+				<Actions>
+					<Record>true</Record>
+					<ActionRecordingMode>CMR</ActionRecordingMode>
+				</Actions>
+			</ScheduleAction>
+			
+			...
+
+			<ScheduleAction>
+			...
+			</ScheduleAction>
+		</ScheduleBlock>
+	</TrackSchedule>
+	<CustomExtensionList>
+		<CustomExtension>
+			<CustomExtensionName>www.hikvision.com/RaCM/trackExt/ver10</CustomExtensionName>
+			<enableSchedule>false</enableSchedule>
+			<SaveAudio>true</SaveAudio>
+			<RedundancyRecord>false</RedundancyRecord>
+			<PreRecordTimeSeconds>5</PreRecordTimeSeconds>
+			<PostRecordTimeSeconds>5</PostRecordTimeSeconds>
+		</CustomExtension>
+	</CustomExtensionList>
+</Track>
+---------------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<ResponseStatus version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<requestURL>/ISAPI/ContentMgmt/record/tracks/101</requestURL>
+	<statusCode>1</statusCode>
+	<statusString>OK</statusString>
+	<subStatusCode>ok</subStatusCode>
+</ResponseStatus>
+
+
+2) search records
+ 
+POST http://10.69.3.129/ISAPI/ContentMgmt/search
+
+<?xml version="1.0" encoding="utf-8"?>
+<CMSearchDescription>
+	<searchID>C6C85C87-58F0-0001-B689-127019008710</searchID>
+	<trackIDList>
+		<trackID>101</trackID>
+	</trackIDList>
+	<timeSpanList>
+		<timeSpan>
+			<startTime>2015-09-30T16:00:00Z</startTime>
+			<endTime>2015-10-08T15:59:59Z</endTime>
+		</timeSpan>
+	</timeSpanList>
+	<maxResults>40</maxResults>
+	<searchResultPostion>0</searchResultPostion>
+	<metadataList>
+		<metadataDescriptor>//recordType.meta.std-cgi.com/VideoMotion</metadataDescriptor>
+	</metadataList>
+</CMSearchDescription>
+---------------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<CMSearchResult version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<searchID>{C6C85C87-58F0-0001-B689-127019008710}</searchID>
+	<responseStatus>true</responseStatus>
+	<responseStatusStrg>MORE</responseStatusStrg>
+	<numOfMatches>40</numOfMatches>
+	<matchList>
+		<searchMatchItem>
+			<sourceID>{0000000000-0000-0000-0000-000000000000}</sourceID>
+			<trackID>101</trackID>
+			<timeSpan>
+				<startTime>2015-09-30T15:59:59Z</startTime>
+				<endTime>2015-09-30T16:12:17Z</endTime>
+			</timeSpan>
+			<mediaSegmentDescriptor>
+			<contentType>video</contentType>
+			<codecType>H.264-BP</codecType>
+			<playbackURI>rtsp://10.69.3.129/Streaming/tracks/101?starttime=2015-09-30T15:59:59Z&amp;endtime=2015-09-30T16:12:17Z&amp;name=ch01_08000100053000100&amp;size=60384296</playbackURI>
+			</mediaSegmentDescriptor>
+			<metadataMatches>
+			<metadataDescriptor>recordType.meta.hikvision.com/timing</metadataDescriptor>
+			</metadataMatches>
+		</searchMatchItem>
+
+		..
+
+		<searchMatchItem>
+		...
+		</searchMatchItem>
+	</matchList>
+</CMSearchResult>
+
+
+3) download record
+
+GET /ISAPI/ContentMgmt/download
+
+<?xml version="1.0"?>
+<downloadRequest>
+	<playbackURI>rtsp://10.69.3.129/Streaming/tracks/101?starttime=2015-09-30T15:59:59Z&amp;endtime=2015-09-30T16:12:17Z&amp;name=ch01_08000100053000100&amp;size=60384296</playbackURI>
+</downloadRequest>
+---------------------------------------------------------------------------------------------------
+<mp4 file data>
+
+
+3. Storage API
+===================================================================================================
+1) get storage info
+
+GET http://10.69.3.129/ISAPI/ContentMgmt/Storage
+---------------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<storage version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<hddList version="1.0" xmlns="http://www.hikvision.com/ver10/XMLSchema" size="8" >
+		<hdd version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+			<id>1</id>
+			<hddName>hdde</hddName>
+			<hddPath></hddPath>
+			<hddType>SATA</hddType>
+			<status>ok</status>
+			<capacity>7580</capacity>
+			<freeSpace>1792</freeSpace>
+			<property>RW</property>
+		</hdd>
+	</hddList>
+	<nasList version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+		<nas version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+			<id>9</id>
+			<addressingFormatType>ipaddress</addressingFormatType>
+			<ipAddress>10.69.0.216</ipAddress>
+			<portNo>0</portNo>
+			<nasType>NFS</nasType>
+			<path>/video_store20150923</path>
+			<status>ok</status>
+			<capacity>143648</capacity>
+			<freeSpace>32256</freeSpace>
+			<property>RW</property>
+			<mountType>NFS</mountType>
+		</nas>
+		<supportMountType opt="NFS,SMB/CIFS"/>
+		<authentication opt="SMB/CIFS"/>
+	</nasList>
+	<workMode>quota</workMode>
+</storage>
+
+
+2) get hdd capabilities
+
+GET http://10.69.3.129/ISAPI/ContentMgmt/Storage/hdd/capabilities
+---------------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<hddList version="1.0" xmlns="http://www.hikvision.com/ver10/XMLSchema" size="8" >
+	<hdd version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+		<id>1</id>
+		<hddName>hdde</hddName>
+		<hddPath></hddPath>
+		<hddType>SATA</hddType>
+		<status>ok</status>
+		<capacity>7580</capacity>
+		<freeSpace>1792</freeSpace>
+		<property>RW</property>
+	</hdd>
+</hddList>
+
+3) get nas info
+
+GET http://10.69.3.129/ISAPI/ContentMgmt/Storage/nas
+---------------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<nasList version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<nas version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+		<id>9</id>
+		<addressingFormatType>ipaddress</addressingFormatType>
+		<ipAddress>10.69.0.216</ipAddress>
+		<portNo>0</portNo>
+		<nasType>NFS</nasType>
+		<path>/video_store20150923</path>
+		<status>ok</status>
+		<capacity>143648</capacity>
+		<freeSpace>32256</freeSpace>
+		<property>RW</property>
+		<mountType>NFS</mountType>
+	</nas>
+	<supportMountType opt="NFS,SMB/CIFS"/>
+	<authentication opt="SMB/CIFS"/>
+</nasList>
+
+4) set nas info
+
+PUT http://10.69.3.129/ISAPI/ContentMgmt/Storage/nas
+
+<?xml version="1.0" encoding="utf-8"?>
+<nasList>
+	<nas>
+		<id>9</id>
+		<addressingFormatType>ipaddress</addressingFormatType>
+		<ipAddress>10.69.0.216</ipAddress>
+		<portNo>0</portNo>
+		<nasType>NFS</nasType>
+		<path>/video_store20150923</path>
+		<property>RW</property>
+		<mountType>NFS</mountType>
+	</nas>
+</nasList>
+---------------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+	<ResponseStatus version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<requestURL>/ISAPI/ContentMgmt/Storage/nas</requestURL>
+	<statusCode>1</statusCode>
+	<statusString>OK</statusString>
+	<subStatusCode>ok</subStatusCode>
+</ResponseStatus>
+
+
+5) get quota info
+
+GET http://10.69.3.129/ISAPI/ContentMgmt/Storage/quota/1
+---------------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<diskQuota version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<id>1</id>
+	<type>ratio</type>
+	<videoQuotaRatio>75</videoQuotaRatio>
+	<pictureQuotaRatio>25</pictureQuotaRatio>
+	<totalVideoVolume>102656</totalVideoVolume>
+	<totalPictureVolume>34048</totalPictureVolume>
+	<freeVideoQuota>0</freeVideoQuota>
+	<freePictureQuota>34048</freePictureQuota>
+</diskQuota>
+
+6) set quota info
+
+PUT http://10.69.3.129/ISAPI/ContentMgmt/Storage/quota/1
+
+<?xml version="1.0" encoding="UTF-8"?>
+<diskQuota version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<id>1</id>
+	<type>ratio</type>
+	<videoQuotaRatio>75</videoQuotaRatio>
+	<pictureQuotaRatio>25</pictureQuotaRatio>
+	<totalVideoVolume>102656</totalVideoVolume>
+	<totalPictureVolume>34048</totalPictureVolume>
+	<freeVideoQuota>0</freeVideoQuota>
+	<freePictureQuota>34048</freePictureQuota>
+</diskQuota>
+---------------------------------------------------------------------------------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+	<ResponseStatus version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+	<requestURL>/ISAPI/ContentMgmt/Storage/quota/1</requestURL>
+	<statusCode>1</statusCode>
+	<statusString>OK</statusString>
+	<subStatusCode>ok</subStatusCode>
+</ResponseStatus>
