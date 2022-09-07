@@ -1,0 +1,85 @@
+1. MySQL Server building & installing & testiing (Ref: https://dev.mysql.com/doc/refman/5.7/en/)
+============ ===================================================================
+1) Download mysql-boost-5.7.17.tar.gz
+2) Unpack mysql-boost-5.7.17.tar.gz
+3) Building & installing
+   $cd mysql-5.7.17
+   $mkdir build
+   $cmake .. -DWITH_BOOST=../boost/boost_1_59_0
+   $make
+   $make install
+Notes: 
+   a. Default installed to /usr/local/mysql, you can change it:
+   $make install DESTDIR="/opt/mysql"
+   b. Default options are read from the following files in the given order: 
+   /etc/my.cnf 
+   /etc/mysql/my.cnf 
+   /usr/local/mysql/etc/my.cnf 
+   ~/.my.cnf 
+
+4) Create user and initialize data directory
+   $groupadd mysql
+   $useradd -g mysql mysql
+
+   $mkdir /usr/local/mysql/etc
+   $cp /usr/local/mysql/support-files/my-default.cnf /usr/local/mysql/etc/my.cnf
+
+   $/usr/local/mysql/bin/mysqld --initialize --user=mysql  \
+    --basedir=/usr/local/mysql	\
+    --datadir=/usr/local/mysql/data
+
+Notes: 
+   Remember 'mysqld --initialize ...' generated password (such as root@localhost: f1a&T6jyXe<0)
+
+5) Run server
+   $/usr/local/mysql/bin/mysqld_safe --user=mysql &
+   
+or
+   $/usr/local/mysql/support-files/mysql.server start
+
+6) Connect server, change password, execute sql, grant privileges to accessor
+   $/usr/local/mysql/bin/mysql -u root -p 
+   mysql> alter user 'root'@'localhost' identified by '123456';
+   mysql> show databases;                                       
+   mysql> use mysql;	                                        
+   mysql> show tables;
+   mysql> show columns from user; 
+   mysql> select * from user; 
+
+   mysql> grant all privileges on *.* to  'root'@'%'  identified by '123456' with grant option;
+   mysql> flush privileges; 
+
+Notes: 
+   mysql crash fixing: change terminal_set() in cmd-line-utils/libedit/terminal.c
+     -char buf[TC_BUFSIZE];
+     -area = buf;
+     +area = NULL;
+
+
+2. Cross compiling for MySQL Server
+===============================================================================
+1) CMake cross compiling (Ref: https://cmake.org/Wiki/CMake_Cross_Compiling)   
+   $cmake .. -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=mysql_cross_toolchain.cmake
+
+2) MySQL depends on ncurses, so download it first and upack and build it first
+   $ cd ncurses-5.9
+   $ CC=arm-linux-gnueabi-gcc CXX=arm-linux-gnueabi-g++ ./configure --host=arm-linux-gnu --prefix=$HOME/ncurses-5.9_build
+   $ make
+   $ make install
+
+Notes: 
+   a. ncurses-5.9 building bug fixing: 
+   File include/curses.tail: remove the comments '/* generated */' 
+   extern NCURSES_EXPORT(bool)    mouse_trafo (int*, int*, bool);              /* generated */
+
+   b. comp_err issues: 
+   cp ../../mysql-5.7.17/build/extra/comp_err /usr/bin/
+   
+   c. mysql-5.7.17_arm/storage/innobase/include/os0atomic.ic:222:2: error: #error "Unsupported platform"   
+      /*#error "Unsupported platform"*/
+
+Notes:
+   Cross compiling is not succeed, and need to try it again.
+   
+
+   
