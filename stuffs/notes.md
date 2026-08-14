@@ -83,7 +83,7 @@ def get_init_image(img_file):
     tw, th = 2*IMG_W, IMG_H
     if iw/ih < tw/th:
         w = round(iw*th/ih)
-        h = th 
+        h = th
     else:
         w = tw
         h = round(ih*tw/iw)
@@ -94,8 +94,19 @@ def get_init_image(img_file):
     target_img[y0:y0+h,x0:x0+w] = scaled_img
     return target_img, (x0, y0, w, h)
 
-def get_transforms(d1, d2, alpha):
-    # frame0 -> frame1
+
+def get_camera_matrix(w, h, fov_h, fov_v):
+    cx, cy = 0.5*w, 0.5*h
+    fx, fy = 0.5*w/math.tan(0.5*fov_h), 0.5*h/math.tan(0.5*fov_v)
+    return np.array([
+        [fx, 0,  cx],
+        [0,  fy, cy],
+        [0,  0,  1 ]
+    ])
+
+
+def get_3d_transforms(d1, d2, alpha):
+    # frame0 (x0, y0, z0, 1) -> frame1 (x1, y1, z1, 1)
     M10 = np.identity(4)
     M10[:3, 3] = np.array([d1/2, 0, 0]) 
     M10[:3,:3] = np.array([
@@ -111,68 +122,129 @@ def get_transforms(d1, d2, alpha):
         [0, 0, -1],
         [0, 1, 0 ]
     ])
-    # frame0 -> frame3
-    M30 = np.identity(4)
-    M30[:3, 3] = np.array([-d2*math.sin(alpha), -d2*math.cos(alpha), 0])
-    M30[:3,:3] = np.array([
-        [math.cos(-alpha), -math.sin(-alpha), 0],
-        [math.sin(-alpha),  math.cos(-alpha), 0],
+    # frame3 -> frame0
+    M03 = np.identity(4)
+    M03[:3, 3] = np.array([0, d2, 0])
+    M03[:3,:3] = np.array([
+        [math.cos(alpha), -math.sin(alpha), 0],
+        [math.sin(alpha),  math.cos(alpha), 0],
         [0,                 0,                1]
     ])
-    return M10, M20, M30
+    M13 = M10 @ M03
+    M23 = M20 @ M03
+    return M13, M23
 
-def project_corners(projector, corners, plane3, M3x):
-    pass
+def get_2d_transforms(K, M13, M23):
+    # screen point (x3, z3, 1) -> left projector image point (u1, v1, 1)
+    H13 = np.zeros((3, 3))
+    H13[:,0] = M13[:3,0]    # 1st column of Rotation matrix
+    H13[:,1] = M13[:3,2]    # 3rd column of Roataion matrix
+    H13[:,2] = M13[:3,3]    # translation
+    H13 = K @ H13
+    # screen point (x3, z3, 1) -> left projector image point (u2, v2, 1)
+    H23 = np.zeros((3, 3))
+    H23[:,0] = M23[:3,0]
+    H23[:,1] = M23[:3,2]
+    H23[:,2] = M23[:3,3]
+    H23 = K @ H23
+    return H13, H23
+
+def get_screen_regions(H31, H32, img_w, img_h):
+    corners = np.array([(0, 0), (img_w, 0), (img_w, img_h), (0, img_h)])
+    r1 = [] # left  projection points in screen
+    r2 = [] # right projection points in screen
+    for u, v in corners:
+        x, z, w = H31 @ [u, v, 1]
+        r1.append([x/w, z/w])
+        x, z, w = H32 @ [u, v, 1]
+        r2.append([x/w, z/w])
+
+    p1, p2, p3, p4 = r1 # left quad in screen
+    p5, p6, p7, p8 = r2 # right quad in screen
+
+    # adjust top points
+    z_max = min(p1[1], p2[1], p5[1], p6[1])
+    p1[1] = p2[1] = p5[1] = p6[1] = z_max
+
+    # adjust top points
+    z_min = max(p3[1], p4[1], p7[1], p8[1])
+    p3[1]= p4[1] = p7[1] = p8[1] = z_min
+    assert z_min < z_max
+
+    # adjust left points
+    x_min = max(p1[0], p4[0])
+    p1[0] = p4[0] = x_min
+
+    # adjust right points
+    x_max = min(p6[0], p7[0])
+    p6[0] = p7[0] = x_max
+    assert x_min < x_max
+
+    # roi: [left, top, width, height]
+    roi = [x_min, z_max, x_max-x_min, z_max-z_min] 
+    return roi, r1, r2
+
+
+def screen2image(screen_roi, image_roi):
+    u0, v0, w0, h0 = image_roi
+    x1, z1, w1, h1 = screen_roi
+    # adjust screen roi size based on image aspect
+    a0 = w0/h0
+    a1 = w1/h1
+    if a0 < a1:
+        w = h1*a0
+        h = h1
+        s = h0/h1
+    else:
+        w = w1
+        h = w1/a0
+        s = w0/w1
+    # adjust top-left point of screen region
+    x1 += 0.5*(w1 - w)
+    z1 -= 0.5*(h1 - h)
+
+    # get 2d transform: screen (x, z, 1) -> image (u, v, 1)
+    H = np.array([
+      [s,  0,  -s*x1 + u0],
+      [0, -s,   s*z1 + v0],
+      [0,  0,  -1        ]
+    ])
+    return H
+
+
+def print_points(points, prefix=""):
+    s = f"{prefix}"
+    for x, y in points:
+        s = s + f" ({x:.2}, {y:.2})"
+    print(s)
+
+def print_values(values, prefix=""):
+    s = f"{prefix}"
+    for v in values:
+        s = s + f" {v:.2}"
+    print(s)
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <image-file>")
         sys.exit(-1)
-    init_img, init_roi = get_init_image(sys.argv[1])
+    init_img, image_roi = get_init_image(sys.argv[1])
+    K = get_camera_matrix(IMG_W, IMG_H, FOV_H, FOV_V)
+    M13, M23 = get_3d_transforms(D1, D2, ALPHA)
+    H13, H23 = get_2d_transforms(K, M13, M23)
+    H31, H32 = np.linalg.inv(H13), np.linalg.inv(H23)
 
-    M10, M20, M30 = get_transforms(D1, D2, ALPHA)
-    M01, M02, M03 = np.linalg.inv(M10), np.linalg.inv(M20), np.linalg.inv(M30)
-    M31 = M30 @ M01
-    M13 = M10 @ M03
-    M32 = M30 @ M02
-    M23 = M20 @ M03
-    plane3 = [0, 1, 0, 0]
-    plane1 = plane3 @ M31
-    plane2 = plane3 @ M32
-
-    projector1 = Projector(IMG_W, IMG_H, FOV_H, FOV_V)
-    projector2 = Projector(IMG_W, IMG_H, FOV_H, FOV_V)
-
-    corners = np.array([
-        [0,     0    ], 
-        [IMG_W, 0    ], 
-        [IMG_W, IMG_H],
-        [0,     IMG_H]
-    ])
-
-    # compute left projection region
-    xyz1 = [projector1.uv2pxyz(u, v, plane1) for u, v in corners]
-    xyzw3 = [M31 @ [x,y,z,1] for x, y, z in xyz1]
-    p1, p2, p3, p4 = [[x/w, y/w, z/w] for x, y, z, w in xyzw3]
-
-    # compute left projection region
-    xyz2 = [projector2.uv2pxyz(u, v, plane2) for u, v in corners]
-    xyzw3 = [M32 @ [x,y,z,1] for x, y, z in xyz2]
-    p5, p6, p7, p8 = [[x/w, y/w, z/w] for x, y, z, w in xyzw3]
-
-    z_max = min(p1[2], p2[2], p5[2], p6[2])
-    p1[2], p2[2], p5[2], p6[2] = z_max, z_max, z_max, z_max
-
-    z_min = max(p3[2], p4[2], p7[2], p8[2])
-    p3[2], p4[2], p7[2], p8[2] = z_min, z_min, z_min, z_min
+    screen_roi, r1, r2 = get_screen_regions(H31, H32, IMG_W, IMG_H)
     
-    kp1 = [p1, p2, p3, p4, p5, p6]
-    kp2 = [p5, p6, p7, p8, p2, p3]
+    print_values(screen_roi, "roi")
+    print_points(r1, "r1")
+    print_points(r2, "r2")
 
-    xyzw1 = [M13 @ [x, y, z, 1] for x, y, z in kp1]
-    uv1 = [projector1.xyz2uv(x/w, y/w, z/w) for x, y, z, w in xyzw1]
-
-    xyzw2 = [M23 @ [x, y, z, 1] for x, y, z in kp2]
-    uv2 = [projector1.xyz2uv(x/w, y/w, z/w) for x, y, z, w in xyzw2]
+    H = screen2image(screen_roi, image_roi)
+    image_pts = []
+    for x, y in r1:
+        u, v, w = H @ [x, y, 1]
+        image_pts.append([u/w, v/w])
+    print_points(image_pts, "init image r1")
 ```
