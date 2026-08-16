@@ -30,51 +30,14 @@ import numpy as np
 # frame1: left projector frame
 # frame2: right projector frame
 # frame3: screen coordinate frame
-IMG_W = 1920                    # projector image width
-IMG_H = 1080                    # projector image height
-FOV_H = math.radians(30.0)      # projector horizontal fov
-FOV_V = math.radians(18.0)      # projector vertical fov
-D1 = 2                          # distance between 2 projectors
-D2 = 6                          # distance from projectors-center to screen
-ALPHA = math.radians(30.0)      # screen angle relative to projectors
+IMG_W = 1920                                        # projector image width
+IMG_H = 1080                                        # projector image height
+FOV_H = math.radians(30.0)                          # projector horizontal fov        
+FOV_V = 2*math.atan(math.tan(FOV_H/2)*IMG_H/IMG_W)  # projector vertical fov    
+D1 = 2                                              # distance between 2 projectors
+D2 = 6                                              # distance from projectors-center to screen
+ALPHA = math.radians(30.0)                          # screen angle relative to projectors
 
-class Projector:
-    def __init__(self, w, h, fov_h, fov_v):
-        self.w = w
-        self.h = h
-        self.fov_h = fov_h
-        self.fov_v = fov_v
-        self.K = self.camera_matrix(self.w, self.h, self.fov_h, self.fov_v)
-        self.Ki = self.project_matrix(self.w, self.h, self.fov_h, self.fov_v)
-
-    def camera_matrix(self, w, h, fov_h, fov_v):
-        cx, cy = 0.5*w, 0.5*h
-        fx, fy  = 0.5*w/math.tan(0.5*fov_h), 0.5*h/math.tan(0.5*fov_v)
-        return np.array([
-            [fx, 0,  cx],
-            [0,  fy, cy],
-            [0,  0,  1 ]
-        ])
-
-    def project_matrix(self, w, h, fov_h, fov_v):
-        cx, cy = 0.5*w, 0.5*h
-        fx, fy  = 0.5*w/math.tan(0.5*fov_h), 0.5*h/math.tan(0.5*fov_v)
-        return np.array([
-            [1/fx, 0,    -cx/fx],
-            [0,    1/fy, -cy/fy],
-            [0,    0,    1     ]
-        ])
-
-    def xyz2uv(self, x, y, z):
-        u, v, w = self.K @ [x, y, z]
-        return u/w, v/w
-
-    def uv2pxyz(self, u, v, plain):
-        a, b, c, d = plain
-        x, y, z = self.Ki @ [u, v, 1]
-        assert abs(a*x + b*y + c*z) > 1e-7, f"light ray {x,y,z} is parallel to plane {a,b,c,d}"
-        s = -d/(a*x+b*y+c*z)
-        return s*x, s*y, s*z
 
 def get_init_image(img_file):
     img = cv2.imread(img_file, cv2.IMREAD_COLOR)
@@ -94,7 +57,6 @@ def get_init_image(img_file):
     target_img[y0:y0+h,x0:x0+w] = scaled_img
     return target_img, (x0, y0, w, h)
 
-
 def get_camera_matrix(w, h, fov_h, fov_v):
     cx, cy = 0.5*w, 0.5*h
     fx, fy = 0.5*w/math.tan(0.5*fov_h), 0.5*h/math.tan(0.5*fov_v)
@@ -104,48 +66,48 @@ def get_camera_matrix(w, h, fov_h, fov_v):
         [0,  0,  1 ]
     ])
 
-
-def get_3d_transforms(d1, d2, alpha):
+def screen_projector_transforms(d1, d2, alpha):
     # frame0 (x0, y0, z0, 1) -> frame1 (x1, y1, z1, 1)
-    M10 = np.identity(4)
-    M10[:3, 3] = np.array([d1/2, 0, 0]) 
-    M10[:3,:3] = np.array([
+    T10 = np.identity(4)
+    T10[:3, 3] = np.array([d1/2, 0, 0]) 
+    T10[:3,:3] = np.array([
         [1, 0, 0 ],
         [0, 0, -1],
         [0, 1, 0 ]
     ])
     # frame0 -> frame2
-    M20 = np.identity(4)
-    M20[:3, 3] = np.array([-d1/2, 0, 0])
-    M20[:3,:3] = np.array([
+    T20 = np.identity(4)
+    T20[:3, 3] = np.array([-d1/2, 0, 0])
+    T20[:3,:3] = np.array([
         [1, 0, 0 ],
         [0, 0, -1],
         [0, 1, 0 ]
     ])
     # frame3 -> frame0
-    M03 = np.identity(4)
-    M03[:3, 3] = np.array([0, d2, 0])
-    M03[:3,:3] = np.array([
+    T03 = np.identity(4)
+    T03[:3, 3] = np.array([0, d2, 0])
+    T03[:3,:3] = np.array([
         [math.cos(alpha), -math.sin(alpha), 0],
         [math.sin(alpha),  math.cos(alpha), 0],
         [0,                 0,                1]
     ])
-    M13 = M10 @ M03
-    M23 = M20 @ M03
-    return M13, M23
+    
+    T13 = T10 @ T03 # fram3 -> frame 1
+    T23 = T20 @ T03 # fram3 -> frame 2
+    return T13, T23
 
-def get_2d_transforms(K, M13, M23):
+def screen_projector_homographies(K, T13, T23):
     # screen point (x3, z3, 1) -> left projector image point (u1, v1, 1)
     H13 = np.zeros((3, 3))
-    H13[:,0] = M13[:3,0]    # 1st column of Rotation matrix
-    H13[:,1] = M13[:3,2]    # 3rd column of Roataion matrix
-    H13[:,2] = M13[:3,3]    # translation
+    H13[:,0] = T13[:3,0]    # 1st column of Rotation matrix
+    H13[:,1] = T13[:3,2]    # 3rd column of Roataion matrix
+    H13[:,2] = T13[:3,3]    # translation
     H13 = K @ H13
     # screen point (x3, z3, 1) -> left projector image point (u2, v2, 1)
     H23 = np.zeros((3, 3))
-    H23[:,0] = M23[:3,0]
-    H23[:,1] = M23[:3,2]
-    H23[:,2] = M23[:3,3]
+    H23[:,0] = T23[:3,0]
+    H23[:,1] = T23[:3,2]
+    H23[:,2] = T23[:3,3]
     H23 = K @ H23
     return H13, H23
 
@@ -184,33 +146,40 @@ def get_screen_regions(H31, H32, img_w, img_h):
     roi = [x_min, z_max, x_max-x_min, z_max-z_min] 
     return roi, r1, r2
 
-
-def screen2image(screen_roi, image_roi):
-    u0, v0, w0, h0 = image_roi
-    x1, z1, w1, h1 = screen_roi
-    # adjust screen roi size based on image aspect
-    a0 = w0/h0
-    a1 = w1/h1
-    if a0 < a1:
-        w = h1*a0
-        h = h1
-        s = h0/h1
+def adjust_screen_regions(screen_roi, r1, r2, image_roi):
+    _, _, iw, ih = image_roi
+    x, z, w, h = screen_roi
+    ia = iw/ih
+    a = w/h
+    # adjust size of screen roi based on image aspect
+    if ia < a:
+        tw = h*ia
+        th = h
     else:
-        w = w1
-        h = w1/a0
-        s = w0/w1
-    # adjust top-left point of screen region
-    x1 += 0.5*(w1 - w)
-    z1 -= 0.5*(h1 - h)
+        tw = w
+        th = w/ia
+    # adjust top-left of screen roi
+    tx = x + 0.5*(w - tw)
+    tz = z - 0.5*(h - th)
+    screen_roi = [tx, tz, tw, th]
 
-    # get 2d transform: screen (x, z, 1) -> image (u, v, 1)
+    # TODO:
+    # adjust left projection region
+    # adjust right projection region
+    return screen_roi, r1, r2
+
+def screen_image_homography(screen_roi, image_roi):
+    u, v, iw, ih = image_roi
+    x, z, w, h = screen_roi
+    assert abs(iw/w - ih/h) < 1e-5
+    sx, sy = iw/w, ih/h
+    # get homography: screen (x, z, 1) -> image (u, v, 1)
     H = np.array([
-      [s,  0,  -s*x1 + u0],
-      [0, -s,   s*z1 + v0],
-      [0,  0,  -1        ]
+      [sx,  0,  -sx*x + u],
+      [0, -sy,   sy*z + v],
+      [0,   0,   1       ]
     ])
     return H
-
 
 def print_points(points, prefix=""):
     s = f"{prefix}"
@@ -231,17 +200,22 @@ if __name__ == "__main__":
         sys.exit(-1)
     init_img, image_roi = get_init_image(sys.argv[1])
     K = get_camera_matrix(IMG_W, IMG_H, FOV_H, FOV_V)
-    M13, M23 = get_3d_transforms(D1, D2, ALPHA)
-    H13, H23 = get_2d_transforms(K, M13, M23)
+    T13, T23 = screen_projector_transforms(D1, D2, ALPHA)
+    H13, H23 = screen_projector_homographies(K, T13, T23)
     H31, H32 = np.linalg.inv(H13), np.linalg.inv(H23)
 
     screen_roi, r1, r2 = get_screen_regions(H31, H32, IMG_W, IMG_H)
-    
     print_values(screen_roi, "roi")
     print_points(r1, "r1")
-    print_points(r2, "r2")
+    print_points(r2, "r2")    
 
-    H = screen2image(screen_roi, image_roi)
+
+    screen_roi, r1, r2 = adjust_screen_regions(screen_roi, r1, r2, image_roi)
+    print_values(screen_roi, "roi")    
+    print_points(r1, "r1")
+    print_points(r2, "r2")
+    
+    H = screen_image_homography(screen_roi, image_roi)
     image_pts = []
     for x, y in r1:
         u, v, w = H @ [x, y, 1]
