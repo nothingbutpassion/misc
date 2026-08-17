@@ -38,12 +38,11 @@ D1 = 2                                              # distance between 2 project
 D2 = 6                                              # distance from projectors-center to screen
 ALPHA = math.radians(30.0)                          # screen angle relative to projectors
 
-
-def get_init_image(img_file):
+def get_init_image(img_file, img_w, img_h):
     img = cv2.imread(img_file, cv2.IMREAD_COLOR)
     assert img is not None, f"Can't load {img_file}"
     iw, ih = img.shape[1::-1]
-    tw, th = 2*IMG_W, IMG_H
+    tw, th = img_w, img_h
     if iw/ih < tw/th:
         w = round(iw*th/ih)
         h = th
@@ -127,7 +126,6 @@ def get_screen_regions(H31, H32, img_w, img_h):
     # adjust top points
     z_max = min(p1[1], p2[1], p5[1], p6[1])
     p1[1] = p2[1] = p5[1] = p6[1] = z_max
-
     # adjust top points
     z_min = max(p3[1], p4[1], p7[1], p8[1])
     p3[1]= p4[1] = p7[1] = p8[1] = z_min
@@ -136,7 +134,6 @@ def get_screen_regions(H31, H32, img_w, img_h):
     # adjust left points
     x_min = max(p1[0], p4[0])
     p1[0] = p4[0] = x_min
-
     # adjust right points
     x_max = min(p6[0], p7[0])
     p6[0] = p7[0] = x_max
@@ -163,9 +160,15 @@ def adjust_screen_regions(screen_roi, r1, r2, image_roi):
     tz = z - 0.5*(h - th)
     screen_roi = [tx, tz, tw, th]
 
-    # TODO:
     # adjust left projection region
+    p1, p2, p3, p4 = r1
+    p1[0] = p4[0] = max(p1[0], p4[0], tx)
+    p2[0] = p3[0] = min(p2[0], p3[0], tx+tw)
+
     # adjust right projection region
+    p5, p6, p7, p8 = r2
+    p5[0] = p8[0] = max(p5[0], p8[0], tx)
+    p6[0] = p7[0] = min(p6[0], p7[0], tx+tw)
     return screen_roi, r1, r2
 
 def screen_image_homography(screen_roi, image_roi):
@@ -181,44 +184,89 @@ def screen_image_homography(screen_roi, image_roi):
     ])
     return H
 
+def get_image_regions(Hi3, screen_r1, screen_r2):
+    # left region of image
+    image_r1 = []
+    for x, z in screen_r1:
+        u, v, w = Hi3 @ [x, z, 1]
+        image_r1.append([u/w, v/w])
+    # right region of image
+    image_r2 = []
+    for x, z in screen_r2:
+        u, v, w = Hi3 @ [x, z, 1]
+        image_r2.append([u/w, v/w])
+    return image_r1, image_r2
+
+def get_projector_regions(H1i, H2i, image_r1, image_r2):
+    # effective region in left projector
+    projector_r1 = []
+    for u1, v1 in image_r1:
+        u, v, w = H1i @ [u1, v1, 1]
+        projector_r1.append([u/w, v/w])
+    # effective region in right projector
+    projector_r2 = []
+    for u2, v2 in image_r2:
+        u, v, w = H2i @ [u2, v2, 1]
+        projector_r2.append([u/w, v/w])
+    return projector_r1, projector_r2
+
 def print_points(points, prefix=""):
     s = f"{prefix}"
     for x, y in points:
-        s = s + f" ({x:.2}, {y:.2})"
+        s = s + f" ({x:.3}, {y:.3})"
     print(s)
 
 def print_values(values, prefix=""):
     s = f"{prefix}"
     for v in values:
-        s = s + f" {v:.2}"
+        s = s + f" {v:.3}"
     print(s)
-
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <image-file>")
         sys.exit(-1)
-    init_img, image_roi = get_init_image(sys.argv[1])
+    init_img, image_roi = get_init_image(sys.argv[1], 2*IMG_W, IMG_H)
     K = get_camera_matrix(IMG_W, IMG_H, FOV_H, FOV_V)
     T13, T23 = screen_projector_transforms(D1, D2, ALPHA)
     H13, H23 = screen_projector_homographies(K, T13, T23)
     H31, H32 = np.linalg.inv(H13), np.linalg.inv(H23)
 
-    screen_roi, r1, r2 = get_screen_regions(H31, H32, IMG_W, IMG_H)
+    screen_roi, screen_r1, screen_r2 = get_screen_regions(H31, H32, IMG_W, IMG_H)
     print_values(screen_roi, "roi")
-    print_points(r1, "r1")
-    print_points(r2, "r2")    
+    print_points(screen_r1, "r1")
+    print_points(screen_r2, "r2")
 
-
-    screen_roi, r1, r2 = adjust_screen_regions(screen_roi, r1, r2, image_roi)
-    print_values(screen_roi, "roi")    
-    print_points(r1, "r1")
-    print_points(r2, "r2")
+    screen_roi, screen_r1, screen_r2 = adjust_screen_regions(screen_roi, screen_r1, screen_r2, image_roi)
+    print_values(screen_roi, "screen_roi")
+    print_points(screen_r1, "screen_r1")
+    print_points(screen_r2, "screen_r2")
     
-    H = screen_image_homography(screen_roi, image_roi)
-    image_pts = []
-    for x, y in r1:
-        u, v, w = H @ [x, y, 1]
-        image_pts.append([u/w, v/w])
-    print_points(image_pts, "init image r1")
+    Hi3 = screen_image_homography(screen_roi, image_roi)
+    image_r1, image_r2 = get_image_regions(Hi3, screen_r1, screen_r2)
+    print_points(image_r1, "image_r1")
+    print_points(image_r2, "image_r2")
+
+    Hi1 = Hi3 @ H31             # left  projector -> left  part of image
+    Hi2 = Hi3 @ H32             # right projector -> right part of image
+    H1i = np.linalg.inv(Hi1)    # left  part of image -> left  projector
+    H2i = np.linalg.inv(Hi2)    # right part of image -> right projector
+    projector_r1, projector_r2 = get_projector_regions(H1i, H2i, image_r1, image_r2)
+    print_points(projector_r1, "projector_r1")
+    print_points(projector_r2, "projector_r2")
+
+    # The follows code is only for debug!
+    src1 = np.array(image_r1)
+    dst1 = np.array(projector_r1)
+    H1, mask1 = cv2.findHomography(src1, dst1)
+    image1 = cv2.warpPerspective(init_img, H1, dsize=(IMG_W, IMG_H))
+    image1 = cv2.resize(image1, dsize=None, fx=0.25, fy=0.25)
+    cv2.imshow("project image1", image1)
+    src2 = np.array(image_r2)
+    dst2 = np.array(projector_r2)
+    H2, mask2 = cv2.findHomography(src2, dst2)
+    image2 = cv2.warpPerspective(init_img, H2, dsize=(IMG_W, IMG_H))
+    image2 = cv2.resize(image2, dsize=None, fx=0.25, fy=0.25)
+    cv2.imshow("project image2", image2)
+    cv2.waitKey()
 ```
