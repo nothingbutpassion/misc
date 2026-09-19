@@ -59,7 +59,34 @@ B = imresize(A, [rows, cols])       % resize with specified size
   ```shell
   glxinfo | grep -E 'OpenGL\s+(core|version|vendor)'
   ```
-
+## OpenCV
+- Set VideoCapture format
+    ```shell
+    # NOTES: first use v4l2-ctl to list supported formats
+    # v4l2-ctl -d /dev/video0 --list-formats-ext
+    ```
+    ```py
+    import cv2
+    cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+    # controls whether captured frames are converted to RGB/BGR (default is 1)
+    cap.set(cv2.CAP_PROP_CONVERT_RGB, 0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+    h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    print(f"size: {w}x{h}")
+    while True:
+    ret, img = cap.read()
+    if not ret:
+        break
+    # need coverting from jpeg to brg
+    img = cv2.imdecode(img, cv2.IMREAD_COLOR)
+    cv2.imshow("img", img)
+    key = cv2.waitKey(30)
+    if key in [27, ord('q')]:
+        break
+```
 
 
 
