@@ -59,6 +59,7 @@ B = imresize(A, [rows, cols])       % resize with specified size
   ```shell
   glxinfo | grep -E 'OpenGL\s+(core|version|vendor)'
   ```
+
 ## OpenCV
 - Set VideoCapture format
     ```shell
@@ -86,7 +87,7 @@ B = imresize(A, [rows, cols])       % resize with specified size
     key = cv2.waitKey(30)
     if key in [27, ord('q')]:
         break
-```
+    ```
 
 ## Node.js
 - **Downlaod/Install**
